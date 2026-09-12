@@ -468,6 +468,23 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </button>
           </aside>
           <main className="conteudo">
+            {carregando && (
+              <div
+                className="carregamentoFluxo"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="gaugeCarregamento">
+                  <div className="gaugeCentro">
+                    <Database />
+                  </div>
+                </div>
+                <div>
+                  <strong>Carregando dados do Oracle</strong>
+                  <span>Calculando saldos, movimentos e previsões…</span>
+                </div>
+              </div>
+            )}
             <header className="topo">
               <div className="tituloModulo">
                 <img src="/brand/logo-financeiro.png" alt="Módulo financeiro" />

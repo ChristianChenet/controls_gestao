@@ -325,6 +325,56 @@ textarea {
   background-size: cover;
   background-attachment: fixed;
 }
+.carregamentoFluxo {
+  position: fixed;
+  inset: 0 0 0 188px;
+  z-index: 48;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 17px;
+  text-align: center;
+  color: #123d46;
+  background: rgba(241, 247, 245, 0.86);
+  backdrop-filter: blur(5px);
+}
+.menuRecolhido .carregamentoFluxo {
+  left: 76px;
+}
+.gaugeCarregamento {
+  width: 112px;
+  height: 112px;
+  padding: 9px;
+  border-radius: 50%;
+  background: conic-gradient(#73ff4c, #13b73d 45%, #087529 70%, #dce9e2 70%);
+  animation: girar 1.15s linear infinite;
+  box-shadow: 0 12px 35px rgba(13, 149, 64, 0.24);
+}
+.gaugeCentro {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+}
+.gaugeCentro svg {
+  width: 35px;
+  height: 35px;
+  color: #12a83a;
+}
+.carregamentoFluxo > div:last-child {
+  display: grid;
+  gap: 4px;
+}
+.carregamentoFluxo strong {
+  font-size: 17px;
+}
+.carregamentoFluxo span {
+  color: #617a7e;
+  font-size: 12px;
+}
 .periodosRapidos {
   display: flex;
   gap: 6px;
@@ -1289,6 +1339,10 @@ textarea {
 @media (max-width: 900px) {
   .app {
     display: block;
+  }
+  .carregamentoFluxo,
+  .menuRecolhido .carregamentoFluxo {
+    inset: 0 0 70px;
   }
   .nav {
     position: fixed;
