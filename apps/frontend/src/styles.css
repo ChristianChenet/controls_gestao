@@ -106,7 +106,10 @@ textarea {
   margin-top: 4px;
 }
 .app.menuRecolhido {
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 60px minmax(0, 1fr);
+}
+.menuRecolhido .nav {
+  padding-inline: 8px;
 }
 .nav .recolherMenu {
   margin-top: auto;
@@ -340,7 +343,7 @@ textarea {
   backdrop-filter: blur(5px);
 }
 .menuRecolhido .carregamentoFluxo {
-  left: 76px;
+  left: 60px;
 }
 .gaugeCarregamento {
   width: 112px;
@@ -457,13 +460,13 @@ textarea {
   gap: 8px;
   border-right: 1px solid #d8e3e1;
   padding: 8px 14px 8px 8px;
-  min-width: 225px;
+  min-width: 265px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
-  width: 86px;
-  height: 66px;
+  width: 112px;
+  height: 78px;
   border-radius: 8px;
   object-fit: contain;
   background: #fff;

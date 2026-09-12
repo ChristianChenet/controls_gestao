@@ -480,7 +480,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   </div>
                 </div>
                 <div>
-                  <strong>Carregando dados do Oracle</strong>
+                  <strong>Carregando dados</strong>
                   <span>Calculando saldos, movimentos e previsões…</span>
                 </div>
               </div>
