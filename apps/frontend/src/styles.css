@@ -473,8 +473,8 @@ textarea {
   border-radius: 8px;
   object-fit: contain;
   object-position: center;
-  background: #fff;
-  border: 1px solid #e1e9e7;
+  background: transparent;
+  border: 0;
 }
 .empresaTopo div {
   display: grid;
