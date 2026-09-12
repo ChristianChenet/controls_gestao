@@ -10,4 +10,5 @@ CREATE TABLE IF NOT EXISTS gestao_perfil_recurso (
   UNIQUE(perfil_id,empresa_id,tipo_recurso,recurso_codigo)
 );
 ALTER TABLE empresas ALTER COLUMN caminho_logo TYPE TEXT;
+UPDATE telas SET nome='Fluxo de Caixa' WHERE codigo='GESTAO_FLUXO_CAIXA';
 COMMIT;

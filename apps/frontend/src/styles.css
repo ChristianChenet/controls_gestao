@@ -98,9 +98,9 @@ textarea {
   width: 21px;
 }
 .nav button.ativo {
-  background: linear-gradient(135deg, #123f45, #17614f);
+  background: linear-gradient(135deg, #0b6f2b, #19b63f);
   color: #fff;
-  box-shadow: inset 3px 0 #38e477;
+  box-shadow: inset 3px 0 #74ff52;
 }
 .nav .sair {
   margin-top: 4px;
@@ -240,9 +240,9 @@ textarea {
 }
 .atalhos .ativo,
 .segmentado .ativo {
-  background: #dff8eb;
-  color: #08724c;
-  border-color: #8fe2b7;
+  background: #e8ffe8;
+  color: #087727;
+  border-color: #79e887;
   font-weight: 700;
 }
 .busca {
@@ -346,9 +346,9 @@ textarea {
   border-color: #61cf9b;
 }
 .periodosRapidos button.ativo {
-  background: #16a05f;
+  background: #18b83f;
   color: #fff;
-  border-color: #16a05f;
+  border-color: #18b83f;
   font-weight: 700;
 }
 .periodosRapidos span {
@@ -385,6 +385,17 @@ textarea {
   color: #70858a;
   font-size: 13px;
 }
+.tituloModulo {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.tituloModulo > img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
 .acoes {
   display: flex;
   align-items: center;
@@ -396,13 +407,13 @@ textarea {
   gap: 8px;
   border-right: 1px solid #d8e3e1;
   padding: 8px 14px 8px 8px;
-  min-width: 175px;
+  min-width: 225px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
-  width: 58px;
-  height: 48px;
+  width: 86px;
+  height: 66px;
   border-radius: 8px;
   object-fit: contain;
   background: #fff;
@@ -949,9 +960,9 @@ textarea {
   color: #385d63;
 }
 .abasAdmin button.ativo {
-  color: #08724c;
-  background: #dff8eb;
-  border-color: #8fe2b7;
+  color: #087727;
+  background: #e8ffe8;
+  border-color: #79e887;
 }
 .abasAdmin svg,
 .adminLista svg {
@@ -1269,7 +1280,7 @@ textarea {
 }
 @media (max-width: 1250px) {
   .cards {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
   .calendario {
     grid-template-columns: repeat(4, minmax(140px, 1fr));

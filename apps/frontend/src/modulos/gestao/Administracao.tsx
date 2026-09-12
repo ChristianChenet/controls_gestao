@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   Building2,
   Cable,
+  Database,
   Plus,
   Save,
   ShieldCheck,
@@ -18,7 +19,11 @@ const abas = [
   ["direitos", "Direitos de acesso", ShieldCheck],
   ["conexoes", "Conexão Oracle", Cable],
 ] as const;
-export function Administracao() {
+export function Administracao({
+  onAbrirFontes,
+}: {
+  onAbrirFontes?: () => void;
+}) {
   const [aba, setAba] = useState<Aba>("empresas"),
     [itens, setItens] = useState<any[]>([]),
     [empresas, setEmpresas] = useState<any[]>([]),
@@ -122,16 +127,25 @@ export function Administracao() {
   return (
     <main className="conteudo administracao">
       <header className="topo">
-        <div>
-          <div className="breadcrumb">CONTROL S GESTÃO · CONFIGURAÇÕES</div>
-          <h1>Administração</h1>
-          <p>
-            Empresas, identidade visual, usuários, perfis, direitos e
-            integrações.
-          </p>
+        <div className="tituloModulo">
+          <img src="/brand/logo-financeiro.png" alt="Módulo Gestão" />
+          <div>
+            <div className="breadcrumb">CONTROL S GESTÃO · CONFIGURAÇÕES</div>
+            <h1>Administração</h1>
+            <p>
+              Empresas, identidade visual, usuários, perfis, direitos e
+              integrações.
+            </p>
+          </div>
         </div>
       </header>
       <div className="abasAdmin">
+        {onAbrirFontes && (
+          <button onClick={onAbrirFontes}>
+            <Database />
+            Fontes de Dados
+          </button>
+        )}
         {abas.map(([id, nome, I]) => (
           <button
             key={id}

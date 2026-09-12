@@ -173,7 +173,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     >
       <aside className="nav">
         <div className="marcaProduto">
-          <img src="/brand/logo-financeiro.png" />
+          <img src="/brand/logo-s-novo.jpg" />
           <div>
             <strong>Control S</strong>
             <span>Gestão</span>
@@ -187,17 +187,10 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             <CalendarDays />
             Fluxo de Caixa
           </button>
-          {pode("gestao.fonte_dados.visualizar") && (
-            <button
-              className={aba === "fontes" ? "ativo" : ""}
-              onClick={() => setAba("fontes")}
-            >
-              <Database />
-              Fontes de Dados
-            </button>
-          )}
           <button
-            className={aba === "administracao" ? "ativo" : ""}
+            className={
+              aba === "administracao" || aba === "fontes" ? "ativo" : ""
+            }
             onClick={() => setAba("administracao")}
           >
             <Settings2 />
@@ -224,7 +217,13 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       {aba === "fontes" ? (
         <Fontes />
       ) : aba === "administracao" ? (
-        <Administracao />
+        <Administracao
+          onAbrirFontes={
+            pode("gestao.fonte_dados.visualizar")
+              ? () => setAba("fontes")
+              : undefined
+          }
+        />
       ) : (
         <>
           {filtrosAbertos && (
@@ -470,12 +469,15 @@ export function Gestao({ onSair }: { onSair: () => void }) {
           </aside>
           <main className="conteudo">
             <header className="topo">
-              <div>
-                <div className="breadcrumb">
-                  Control S Gestão <ChevronRight /> Financeiro
+              <div className="tituloModulo">
+                <img src="/brand/logo-financeiro.png" alt="Módulo financeiro" />
+                <div>
+                  <div className="breadcrumb">
+                    Control S Gestão <ChevronRight /> Financeiro
+                  </div>
+                  <h1>Fluxo de Caixa</h1>
+                  <p>Visão operacional e projetada do caixa</p>
                 </div>
-                <h1>Fluxo de Caixa</h1>
-                <p>Visão operacional e projetada do caixa</p>
               </div>
               <div className="acoes">
                 <div className="empresaTopo">
@@ -884,12 +886,15 @@ function Fontes() {
   return (
     <main className="conteudo fontes">
       <header className="topo">
-        <div>
-          <div className="breadcrumb">
-            Control S Gestão <ChevronRight /> Governança
+        <div className="tituloModulo">
+          <img src="/brand/logo-financeiro.png" alt="Módulo financeiro" />
+          <div>
+            <div className="breadcrumb">
+              Control S Gestão <ChevronRight /> Governança
+            </div>
+            <h1>Fontes de Dados</h1>
+            <p>SQL Oracle versionado, auditável e protegido por permissão</p>
           </div>
-          <h1>Fontes de Dados</h1>
-          <p>SQL Oracle versionado, auditável e protegido por permissão</p>
         </div>
       </header>
       <section className="painel fonteLista">
