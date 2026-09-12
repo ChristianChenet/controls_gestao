@@ -460,13 +460,13 @@ textarea {
   gap: 8px;
   border-right: 1px solid #d8e3e1;
   padding: 8px 14px 8px 8px;
-  min-width: 265px;
+  min-width: 330px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
-  width: 112px;
-  height: 78px;
+  width: 148px;
+  height: 92px;
   border-radius: 8px;
   object-fit: contain;
   background: #fff;
@@ -481,7 +481,9 @@ textarea {
   color: #84979b;
 }
 .empresaTopo b {
-  font-size: 11px;
+  font-size: 16px;
+  line-height: 1.15;
+  color: #143c43;
   white-space: nowrap;
 }
 .acoes span {
