@@ -67,7 +67,7 @@ function Login({ aoEntrar }: { aoEntrar: (token: string) => void }) {
       <form className="loginPanel" onSubmit={enviar}>
         <div className="loginBrand">
           <img src="/brand/logo-s-novo.jpg" alt="Control S" />
-          <span>Plataforma modular corporativa</span>
+          <span>Plataforma Corporativa</span>
         </div>
         <h1>Control S Gestão</h1>
         <p className="loginDescricao">

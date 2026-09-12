@@ -35,7 +35,7 @@ const falha = (codigo: string, mensagem: string) => ({
 
 export async function criarApp() {
   const app = Fastify({ logger: true });
-  await app.register(cors, { origin: ambiente.frontendOrigin });
+  await app.register(cors, { origin: true });
   await app.register(jwt, { secret: ambiente.jwtSecret });
   app.get("/saude", async () => ({ status: "ok", modulo: "Control S Gestão" }));
   async function resolver(login: string) {
