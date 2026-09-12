@@ -90,9 +90,17 @@ export async function executarOracle<T = Record<string, unknown>>(
       "A fonte de dados aceita somente SELECT ou WITH em modo de leitura.",
     );
   }
+  const binds = Object.fromEntries(
+    Object.entries(parametros).map(([chave, valor]) => [
+      chave,
+      /^P_DT/.test(chave) && typeof valor === "string"
+        ? new Date(`${valor.slice(0, 10)}T12:00:00`)
+        : valor,
+    ]),
+  );
   const conexao = await (await obterPool()).getConnection();
   try {
-    const resultado = await conexao.execute(sql, parametros, {
+    const resultado = await conexao.execute(sql, binds, {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
       maxRows,
     });

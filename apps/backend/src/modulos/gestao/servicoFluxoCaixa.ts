@@ -23,10 +23,43 @@ const numero = (v: unknown) => Number(v ?? 0);
 const iso = (v: unknown) => new Date(String(v)).toISOString().slice(0, 10);
 
 export async function garantirFontes(usuarioId: number) {
+  const hoje = new Date();
+  const fim = new Date(hoje.getTime() + 30 * 86400000);
+  const data = (d: Date) => d.toISOString().slice(0, 10);
+  const parametrosPadrao = (nome: string) => {
+    if (nome === "oracle_fluxo_listar_pessoas") return { P_BUSCA: "%" };
+    if (nome === "oracle_fluxo_documento_detalhe")
+      return { P_ORIGEM: "DUPREC", P_ID_DOCUMENTO: "0" };
+    if (nome === "oracle_fluxo_saldo_portador")
+      return {
+        P_DTINI: data(hoje),
+        P_ESTAB: null,
+        P_IDPORTADOR: null,
+        P_TIPO_SALDO: "FINANCEIRO",
+      };
+    if (
+      nome === "oracle_fluxo_movimentos_detalhe" ||
+      nome === "oracle_fluxo_recebimentos_realizados" ||
+      nome === "oracle_fluxo_previsao_recebimentos_historico"
+    )
+      return { P_DTINI: data(hoje), P_DTFIM: data(fim), P_ESTAB: null };
+    return {};
+  };
   for (const [nome, descricao, categoria, sql] of FONTES_INICIAIS)
     await consultar(
-      `INSERT INTO gestao_fonte_dados(nome,descricao,categoria,banco_origem,tipo,sql_texto,parametros_json,criado_por) VALUES($1,$2,$3,'ORACLE','SELECT',$4,'{}',$5) ON CONFLICT(nome) DO NOTHING`,
-      [nome, descricao, categoria, sql, usuarioId],
+      `INSERT INTO gestao_fonte_dados(nome,descricao,categoria,banco_origem,tipo,sql_texto,parametros_json,criado_por)
+       VALUES($1,$2,$3,'ORACLE','SELECT',$4,$5,$6)
+       ON CONFLICT(nome) DO UPDATE SET descricao=EXCLUDED.descricao,categoria=EXCLUDED.categoria,
+       sql_texto=EXCLUDED.sql_texto,parametros_json=EXCLUDED.parametros_json,atualizado_em=NOW()
+       WHERE gestao_fonte_dados.publicado_em IS NULL`,
+      [
+        nome,
+        descricao,
+        categoria,
+        sql,
+        JSON.stringify(parametrosPadrao(nome)),
+        usuarioId,
+      ],
     );
 }
 function previsao(detalhes: any[], ini: string, fim: string, formas: string[]) {
