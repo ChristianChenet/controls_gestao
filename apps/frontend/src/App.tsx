@@ -69,7 +69,10 @@ function Login({ aoEntrar }: { aoEntrar: (token: string) => void }) {
           <img src="/brand/logo-s-novo.jpg" alt="Control S" />
           <span>Plataforma Corporativa</span>
         </div>
-        <h1>Control S Gestão</h1>
+        <div className="loginTitulo">
+          <img src="/brand/logo-financeiro.png" alt="Módulo Gestão" />
+          <h1>Control S Gestão</h1>
+        </div>
         <p className="loginDescricao">
           Gestão integrada para decisões operacionais e estratégicas.
         </p>

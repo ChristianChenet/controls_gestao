@@ -10,6 +10,8 @@ import {
   Filter,
   Lightbulb,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   Search,
   Settings2,
@@ -63,6 +65,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     [carregando, setCarregando] = useState(false),
     [telaCheia, setTelaCheia] = useState(false),
     [gradeMaximizada, setGradeMaximizada] = useState(false),
+    [menuRecolhido, setMenuRecolhido] = useState(
+      localStorage.getItem("controlSGestaoMenuRecolhido") === "true",
+    ),
     [periodoRapido, setPeriodoRapido] = useState("30_DIAS"),
     [filtrosAbertos, setFiltrosAbertos] = useState(false),
     [aba, setAba] = useState<"fluxo" | "fontes" | "administracao">("fluxo");
@@ -163,10 +168,12 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       </div>
     );
   return (
-    <div className={`app ${telaCheia ? "fullscreen" : ""}`}>
+    <div
+      className={`app ${menuRecolhido ? "menuRecolhido" : ""} ${telaCheia ? "fullscreen" : ""}`}
+    >
       <aside className="nav">
         <div className="marcaProduto">
-          <img src="/brand/logo-s-novo.jpg" />
+          <img src="/brand/logo-financeiro.png" />
           <div>
             <strong>Control S</strong>
             <span>Gestão</span>
@@ -197,6 +204,18 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             Configurações
           </button>
         </nav>
+        <button
+          className="recolherMenu"
+          title={menuRecolhido ? "Expandir menu" : "Recolher menu"}
+          onClick={() => {
+            const novo = !menuRecolhido;
+            setMenuRecolhido(novo);
+            localStorage.setItem("controlSGestaoMenuRecolhido", String(novo));
+          }}
+        >
+          {menuRecolhido ? <PanelLeftOpen /> : <PanelLeftClose />}
+          <span>{menuRecolhido ? "Expandir" : "Recolher menu"}</span>
+        </button>
         <button className="sair" onClick={onSair}>
           <LogOut />
           Sair

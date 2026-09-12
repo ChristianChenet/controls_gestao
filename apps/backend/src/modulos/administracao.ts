@@ -131,7 +131,17 @@ export async function listarPermissoesPerfil(
   empresaId: number,
 ) {
   return consultar(
-    `SELECT 'MODULO' tipo,m.id referencia_id,m.codigo,m.nome,EXISTS(SELECT 1 FROM perfis_permissoes pp WHERE pp.perfil_id=$1 AND (pp.empresa_id=$2 OR pp.empresa_id IS NULL) AND pp.modulo_id=m.id AND pp.menu_id IS NULL AND pp.acao_id IS NULL AND pp.permitido=TRUE) permitido FROM modulos m WHERE m.ativo=TRUE UNION ALL SELECT 'MENU',me.id,me.codigo,me.nome,EXISTS(SELECT 1 FROM perfis_permissoes pp WHERE pp.perfil_id=$1 AND (pp.empresa_id=$2 OR pp.empresa_id IS NULL) AND pp.menu_id=me.id AND pp.acao_id IS NULL AND pp.permitido=TRUE) FROM menus me WHERE me.ativo=TRUE UNION ALL SELECT 'ACAO',a.id,a.codigo,a.nome,EXISTS(SELECT 1 FROM perfis_permissoes pp WHERE pp.perfil_id=$1 AND (pp.empresa_id=$2 OR pp.empresa_id IS NULL) AND pp.acao_id=a.id AND pp.permitido=TRUE) FROM acoes a WHERE a.ativo=TRUE ORDER BY tipo DESC,nome`,
+    `WITH P AS (SELECT administrador FROM perfis WHERE id=$1), RECURSOS AS (
+      SELECT 'MODULO' tipo,m.id referencia_id,m.codigo,m.nome FROM modulos m WHERE m.ativo=TRUE
+      UNION ALL SELECT 'MENU',me.id,me.codigo,me.nome FROM menus me WHERE me.ativo=TRUE
+      UNION ALL SELECT 'TELA',t.id,t.codigo,t.nome FROM telas t WHERE t.ativo=TRUE
+      UNION ALL SELECT 'ACAO',a.id,a.codigo,a.nome FROM acoes a WHERE a.ativo=TRUE
+      UNION ALL SELECT 'FONTE',f.id,f.nome,f.descricao FROM gestao_fonte_dados f WHERE f.ativo=TRUE
+      UNION ALL SELECT 'RELATORIO',NULL,'FLUXO_RESUMO','Resumo do fluxo de caixa'
+      UNION ALL SELECT 'RELATORIO',NULL,'FLUXO_GRADE','Grade diária, semanal e mensal'
+      UNION ALL SELECT 'RELATORIO',NULL,'FLUXO_DETALHES','Detalhamento por documento'
+      UNION ALL SELECT 'RELATORIO',NULL,'FLUXO_INSIGHTS','Insights automáticos'
+    ) SELECT r.*,((SELECT administrador FROM P) OR EXISTS(SELECT 1 FROM gestao_perfil_recurso pr WHERE pr.perfil_id=$1 AND (pr.empresa_id=$2 OR pr.empresa_id IS NULL) AND pr.tipo_recurso=r.tipo AND pr.recurso_codigo=r.codigo AND pr.permitido=TRUE)) permitido FROM RECURSOS r ORDER BY CASE r.tipo WHEN 'MODULO' THEN 1 WHEN 'MENU' THEN 2 WHEN 'TELA' THEN 3 WHEN 'RELATORIO' THEN 4 WHEN 'FONTE' THEN 5 ELSE 6 END,r.nome`,
     [perfilId, empresaId],
   );
 }
@@ -144,17 +154,46 @@ export async function salvarPermissoesPerfil(
     "DELETE FROM perfis_permissoes WHERE perfil_id=$1 AND empresa_id=$2",
     [perfilId, empresaId],
   );
+  await consultar(
+    "DELETE FROM gestao_perfil_recurso WHERE perfil_id=$1 AND empresa_id=$2",
+    [perfilId, empresaId],
+  );
   for (const i of itens)
-    await consultar(
-      "INSERT INTO perfis_permissoes(perfil_id,empresa_id,modulo_id,menu_id,acao_id,permitido) VALUES($1,$2,$3,$4,$5,TRUE)",
-      [
-        perfilId,
-        empresaId,
-        i.tipo === "MODULO" ? i.referencia_id : null,
-        i.tipo === "MENU" ? i.referencia_id : null,
-        i.tipo === "ACAO" ? i.referencia_id : null,
-      ],
-    );
+    if (["MODULO", "MENU", "TELA", "ACAO"].includes(i.tipo))
+      await consultar(
+        "INSERT INTO perfis_permissoes(perfil_id,empresa_id,modulo_id,menu_id,tela_id,acao_id,permitido) VALUES($1,$2,$3,$4,$5,$6,TRUE)",
+        [
+          perfilId,
+          empresaId,
+          i.tipo === "MODULO" ? i.referencia_id : null,
+          i.tipo === "MENU" ? i.referencia_id : null,
+          i.tipo === "TELA" ? i.referencia_id : null,
+          i.tipo === "ACAO" ? i.referencia_id : null,
+        ],
+      );
+    else
+      await consultar(
+        "INSERT INTO gestao_perfil_recurso(perfil_id,empresa_id,tipo_recurso,recurso_codigo,permitido) VALUES($1,$2,$3,$4,TRUE)",
+        [perfilId, empresaId, i.tipo, i.codigo],
+      );
+}
+export async function podeAcessarRecurso(
+  usuarioId: number,
+  empresaId: number,
+  tipo: string,
+  codigo: string,
+) {
+  const u = await consultarUm<any>(
+    "SELECT perfil_id,administrador,superadmin FROM usuarios WHERE id=$1",
+    [usuarioId],
+  );
+  if (u?.administrador || u?.superadmin) return true;
+  return Boolean(
+    await consultarUm(
+      "SELECT id FROM gestao_perfil_recurso WHERE perfil_id=$1 AND (empresa_id=$2 OR empresa_id IS NULL) AND tipo_recurso=$3 AND recurso_codigo=$4 AND permitido=TRUE",
+      [u?.perfil_id, empresaId, tipo, codigo],
+    ),
+  );
 }
 
 export const listarConexoesOracle = () =>

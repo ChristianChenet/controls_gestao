@@ -21,6 +21,7 @@ import {
   listarUsuarios,
   listarConexoesOracle,
   permissoesUsuario,
+  podeAcessarRecurso,
   salvarEmpresa,
   salvarPerfil,
   salvarPermissoesPerfil,
@@ -243,7 +244,7 @@ export async function criarApp() {
   app.post(
     "/api/admin/perfis/:id/permissoes",
     { preHandler: admin },
-    async (req) => {
+    async (req, res) => {
       const b = req.body as any;
       await salvarPermissoesPerfil(
         Number((req.params as any).id),
@@ -362,29 +363,68 @@ export async function criarApp() {
     { preHandler: exigir("gestao.fonte_dados.visualizar") },
     async (req) => {
       await garantirFontes(req.user.id);
-      return consultar(
+      const todas = await consultar<any>(
         "SELECT id,nome,descricao,categoria,banco_origem,tipo,ativo,editavel,atualizado_em FROM gestao_fonte_dados ORDER BY categoria,nome",
       );
+      const permitidas = [];
+      for (const fonte of todas)
+        if (
+          await podeAcessarRecurso(
+            req.user.id,
+            req.user.empresaAtivaId,
+            "FONTE",
+            fonte.nome,
+          )
+        )
+          permitidas.push(fonte);
+      return permitidas;
     },
   );
   app.get(
     "/gestao/fontes-dados/:id",
     { preHandler: exigir("gestao.fonte_dados.ver_sql") },
-    async (req) =>
-      consultarUm("SELECT * FROM gestao_fonte_dados WHERE id=$1", [
-        Number((req.params as any).id),
-      ]),
+    async (req, res) => {
+      const fonte = await consultarUm<any>(
+        "SELECT * FROM gestao_fonte_dados WHERE id=$1",
+        [Number((req.params as any).id)],
+      );
+      if (
+        !fonte ||
+        !(await podeAcessarRecurso(
+          req.user.id,
+          req.user.empresaAtivaId,
+          "FONTE",
+          fonte.nome,
+        ))
+      )
+        return res
+          .code(403)
+          .send({ mensagem: "Fonte de dados não liberada para este perfil." });
+      return fonte;
+    },
   );
   app.put(
     "/gestao/fontes-dados/:id",
     { preHandler: exigir("gestao.fonte_dados.editar") },
-    async (req) => {
+    async (req, res) => {
       const id = Number((req.params as any).id),
         b = req.body as any,
         atual = await consultarUm<any>(
           "SELECT * FROM gestao_fonte_dados WHERE id=$1",
           [id],
         );
+      if (
+        !atual ||
+        !(await podeAcessarRecurso(
+          req.user.id,
+          req.user.empresaAtivaId,
+          "FONTE",
+          atual.nome,
+        ))
+      )
+        return res
+          .code(403)
+          .send({ mensagem: "Fonte de dados não liberada para este perfil." });
       await consultar(
         "INSERT INTO gestao_fonte_dados_versao(fonte_dados_id,versao,sql_texto,parametros_json,alterado_por,observacao) VALUES($1,COALESCE((SELECT MAX(versao)+1 FROM gestao_fonte_dados_versao WHERE fonte_dados_id=$1),1),$2,$3,$4,$5)",
         [
@@ -419,6 +459,18 @@ export async function criarApp() {
           [id],
         ),
         inicio = Date.now();
+      if (
+        !f ||
+        !(await podeAcessarRecurso(
+          req.user.id,
+          req.user.empresaAtivaId,
+          "FONTE",
+          f.nome,
+        ))
+      )
+        return res
+          .code(403)
+          .send({ mensagem: "Fonte de dados não liberada para este perfil." });
       try {
         const linhas = await executarOracle(
           f.sql_texto,
@@ -458,11 +510,29 @@ export async function criarApp() {
   app.post(
     "/gestao/fontes-dados/:id/publicar",
     { preHandler: exigir("gestao.fonte_dados.publicar") },
-    async (req) =>
-      consultarUm(
+    async (req, res) => {
+      const id = Number((req.params as any).id);
+      const fonte = await consultarUm<any>(
+        "SELECT nome FROM gestao_fonte_dados WHERE id=$1",
+        [id],
+      );
+      if (
+        !fonte ||
+        !(await podeAcessarRecurso(
+          req.user.id,
+          req.user.empresaAtivaId,
+          "FONTE",
+          fonte.nome,
+        ))
+      )
+        return res
+          .code(403)
+          .send({ mensagem: "Fonte de dados não liberada para este perfil." });
+      return consultarUm(
         "UPDATE gestao_fonte_dados SET publicado_em=NOW(),publicado_por=$2 WHERE id=$1 RETURNING *",
-        [Number((req.params as any).id), req.user.id],
-      ),
+        [id, req.user.id],
+      );
+    },
   );
   app.post(
     "/gestao/fontes-dados",

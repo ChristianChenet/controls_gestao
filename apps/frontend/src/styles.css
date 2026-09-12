@@ -20,7 +20,7 @@ textarea {
 .app {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 238px minmax(0, 1fr);
+  grid-template-columns: 188px minmax(0, 1fr);
   background: #f4f7f6;
 }
 .nav {
@@ -103,7 +103,32 @@ textarea {
   box-shadow: inset 3px 0 #38e477;
 }
 .nav .sair {
+  margin-top: 4px;
+}
+.app.menuRecolhido {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+.nav .recolherMenu {
   margin-top: auto;
+  border-top: 1px solid #ffffff14;
+  border-radius: 0;
+  padding-top: 17px;
+}
+.menuRecolhido .marcaProduto {
+  justify-content: center;
+  padding-inline: 0;
+}
+.menuRecolhido .marcaProduto div,
+.menuRecolhido .nav button span {
+  display: none;
+}
+.menuRecolhido .nav button {
+  justify-content: center;
+  padding-inline: 5px;
+  font-size: 0;
+}
+.menuRecolhido .nav button svg {
+  margin: 0;
 }
 .filtros {
   background: #fff;
@@ -293,6 +318,12 @@ textarea {
 .conteudo {
   padding: 28px 32px;
   min-width: 0;
+  background-image:
+    linear-gradient(rgba(244, 247, 246, 0.95), rgba(244, 247, 246, 0.95)),
+    url("/brand/fundo-control-s.png");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
 }
 .periodosRapidos {
   display: flex;
@@ -364,11 +395,14 @@ textarea {
   align-items: center;
   gap: 8px;
   border-right: 1px solid #d8e3e1;
-  padding-right: 12px;
+  padding: 8px 14px 8px 8px;
+  min-width: 175px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
-  width: 34px;
-  height: 34px;
+  width: 58px;
+  height: 48px;
   border-radius: 8px;
   object-fit: contain;
   background: #fff;
@@ -1048,6 +1082,67 @@ textarea {
   padding: 0 18px 18px;
   gap: 7px;
 }
+.gruposPermissoes {
+  display: grid;
+  gap: 14px;
+  padding: 0 18px 20px;
+}
+.grupoPermissao {
+  border: 1px solid #dce7e5;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fbfa;
+}
+.grupoPermissao > header {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 14px;
+  background: #edf5f3;
+}
+.grupoPermissao > header h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.grupoPermissao > header span {
+  font-size: 10px;
+  color: #71868a;
+}
+.grupoPermissao .listaPermissoes {
+  padding: 10px;
+}
+.uploadLogo {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px dashed #b9ceca;
+  border-radius: 10px;
+  background: #f7faf9;
+}
+.uploadLogo > img {
+  width: 82px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+.uploadLogo > div {
+  display: grid;
+  gap: 5px;
+}
+.uploadLogo input[type="file"] {
+  font-size: 11px;
+  padding: 6px;
+}
+.uploadLogo small {
+  color: #71868a;
+  font-size: 9px;
+}
+.uploadLogo em {
+  color: #b42318;
+  font-size: 10px;
+}
 .listaPermissoes label {
   border: 1px solid #e1e9e7;
   border-radius: 9px;
@@ -1196,7 +1291,8 @@ textarea {
   }
   .nav > .marcaProduto,
   .nav > .marca,
-  .nav > .sair {
+  .nav > .sair,
+  .nav > .recolherMenu {
     display: none;
   }
   .nav nav {

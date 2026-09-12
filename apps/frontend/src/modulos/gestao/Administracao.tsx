@@ -172,27 +172,53 @@ export function Administracao() {
               itens={perfis}
             />
           </div>
-          <div className="listaPermissoes">
-            {permissoes.map((p, i) => (
-              <label key={`${p.tipo}-${p.referencia_id}`}>
-                <input
-                  type="checkbox"
-                  checked={p.permitido}
-                  onChange={(e) =>
-                    setPermissoes(
-                      permissoes.map((x, j) =>
-                        j === i ? { ...x, permitido: e.target.checked } : x,
-                      ),
-                    )
-                  }
-                />
-                <div>
-                  <b>{p.nome}</b>
-                  <span>{p.codigo}</span>
-                </div>
-                <em>{p.tipo}</em>
-              </label>
-            ))}
+          <div className="gruposPermissoes">
+            {[
+              ["MODULO", "Módulos"],
+              ["MENU", "Menus"],
+              ["TELA", "Telas"],
+              ["RELATORIO", "Relatórios"],
+              ["FONTE", "Fontes de dados"],
+              ["ACAO", "Ações"],
+            ].map(([tipo, nome]) => {
+              const grupo = permissoes.filter((p) => p.tipo === tipo);
+              return grupo.length ? (
+                <section className="grupoPermissao" key={tipo}>
+                  <header>
+                    <h3>{nome}</h3>
+                    <span>
+                      {grupo.filter((p) => p.permitido).length} liberado(s)
+                    </span>
+                  </header>
+                  <div className="listaPermissoes">
+                    {grupo.map((p) => {
+                      const i = permissoes.indexOf(p);
+                      return (
+                        <label key={`${p.tipo}-${p.referencia_id}-${p.codigo}`}>
+                          <input
+                            type="checkbox"
+                            checked={p.permitido}
+                            onChange={(ev) =>
+                              setPermissoes(
+                                permissoes.map((x, j) =>
+                                  j === i
+                                    ? { ...x, permitido: ev.target.checked }
+                                    : x,
+                                ),
+                              )
+                            }
+                          />
+                          <div>
+                            <b>{p.nome}</b>
+                            <span>{p.codigo}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null;
+            })}
           </div>
         </section>
       ) : (
@@ -304,6 +330,25 @@ const CampoSelect = ({
   </label>
 );
 function Empresa({ e }: { e: any }) {
+  const [logo, setLogo] = useState(e.caminho_logo ?? "");
+  const [erroLogo, setErroLogo] = useState("");
+  function carregarLogo(arquivo?: File) {
+    if (!arquivo) return;
+    if (!arquivo.type.startsWith("image/")) {
+      setErroLogo("Selecione uma imagem válida.");
+      return;
+    }
+    if (arquivo.size > 1024 * 1024) {
+      setErroLogo("A imagem deve ter no máximo 1 MB.");
+      return;
+    }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      setLogo(String(leitor.result));
+      setErroLogo("");
+    };
+    leitor.readAsDataURL(arquivo);
+  }
   return (
     <>
       <label>
@@ -328,11 +373,19 @@ function Empresa({ e }: { e: any }) {
       </label>
       <label>
         Logo da empresa
-        <input
-          name="caminho_logo"
-          defaultValue={e.caminho_logo}
-          placeholder="/brand/cliente-logo.png"
-        />
+        <div className="uploadLogo">
+          <img src={logo || "/brand/logo-s-novo.jpg"} alt="Prévia do logo" />
+          <div>
+            <input type="hidden" name="caminho_logo" value={logo} />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              onChange={(ev) => carregarLogo(ev.target.files?.[0])}
+            />
+            <small>PNG, JPG, WEBP ou SVG · máximo 1 MB</small>
+            {erroLogo && <em>{erroLogo}</em>}
+          </div>
+        </div>
       </label>
       <label>
         Imagem de fundo
