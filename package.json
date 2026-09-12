@@ -1,0 +1,11 @@
+{
+  "name": "control-s-gestao",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/backend", "apps/frontend"],
+  "scripts": {
+    "dev:backend": "npm --workspace apps/backend run dev",
+    "dev:frontend": "npm --workspace apps/frontend run dev",
+    "build": "npm --workspace apps/backend run build && npm --workspace apps/frontend run build"
+  }
+}
