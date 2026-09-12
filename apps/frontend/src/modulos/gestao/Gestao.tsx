@@ -63,9 +63,11 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     [carregando, setCarregando] = useState(false),
     [telaCheia, setTelaCheia] = useState(false),
     [gradeMaximizada, setGradeMaximizada] = useState(false),
+    [periodoRapido, setPeriodoRapido] = useState("30_DIAS"),
     [filtrosAbertos, setFiltrosAbertos] = useState(false),
     [aba, setAba] = useState<"fluxo" | "fontes" | "administracao">("fluxo");
   const usuario = JSON.parse(localStorage.getItem("gestao_usuario") ?? "{}");
+  const empresaAtiva = usuario.empresas?.[0];
   const pode = (p: string) =>
     usuario.superadmin ||
     usuario.administrador ||
@@ -136,7 +138,11 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       ),
     [detalhes, dia],
   );
-  const definirPeriodo = (quantidade: number, visao = "DIA") => {
+  const definirPeriodo = (
+    quantidade: number,
+    visao = "DIA",
+    selecionado = "PERSONALIZADO",
+  ) => {
     const inicio = new Date();
     const fim = new Date(inicio.getTime() + (quantidade - 1) * 86400000);
     setF({
@@ -145,6 +151,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       dataFinal: fim.toISOString().slice(0, 10),
       visao,
     });
+    setPeriodoRapido(selecionado);
   };
   if (!pode("gestao.acessar"))
     return (
@@ -158,9 +165,12 @@ export function Gestao({ onSair }: { onSair: () => void }) {
   return (
     <div className={`app ${telaCheia ? "fullscreen" : ""}`}>
       <aside className="nav">
-        <img src="/brand/logo-s-novo.jpg" />
-        <div className="marca">
-          CONTROL S<small>GESTÃO</small>
+        <div className="marcaProduto">
+          <img src="/brand/logo-s-novo.jpg" />
+          <div>
+            <strong>Control S</strong>
+            <span>Gestão</span>
+          </div>
         </div>
         <nav>
           <button
@@ -221,31 +231,14 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             <label>
               Período
               <div className="atalhos">
-                <button
-                  onClick={() =>
-                    setF({
-                      ...f,
-                      dataFinal: new Date(Date.now() + 6 * 86400000)
-                        .toISOString()
-                        .slice(0, 10),
-                    })
-                  }
-                >
-                  7 dias
-                </button>
-                <button className="ativo">30 dias</button>
-                <button
-                  onClick={() =>
-                    setF({
-                      ...f,
-                      dataFinal: new Date(Date.now() + 89 * 86400000)
-                        .toISOString()
-                        .slice(0, 10),
-                    })
-                  }
-                >
-                  90 dias
-                </button>
+                {[7, 30, 60, 90].map((n) => (
+                  <button
+                    className={periodoRapido === `${n}_DIAS` ? "ativo" : ""}
+                    onClick={() => definirPeriodo(n, "DIA", `${n}_DIAS`)}
+                  >
+                    {n} dias
+                  </button>
+                ))}
               </div>
             </label>
             <div className="duplo">
@@ -268,16 +261,62 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </div>
             <label>
               Escopo
-              <select>
-                <option>Consolidado</option>
-                <option>Loja</option>
-                <option>Grupo filial</option>
+              <select
+                value={f.escopo ?? "CONSOLIDADO"}
+                onChange={(e) => setF({ ...f, escopo: e.target.value })}
+              >
+                <option value="CONSOLIDADO">Consolidado</option>
+                <option value="LOJA">Loja</option>
+                <option value="GRUPO_FILIAL">Grupo filial</option>
               </select>
+            </label>
+            <label>
+              Grupo filial
+              <input
+                placeholder="Todos os grupos"
+                onChange={(e) =>
+                  setF({
+                    ...f,
+                    grupoFilialId: e.target.value
+                      ? Number(e.target.value)
+                      : null,
+                  })
+                }
+              />
             </label>
             <label>
               Empresa
               <select>
                 <option>Todas as empresas</option>
+              </select>
+            </label>
+            <div className="duplo">
+              <label>
+                Centro de custo
+                <input
+                  placeholder="Todos"
+                  onChange={(e) => setF({ ...f, centroCusto: e.target.value })}
+                />
+              </label>
+              <label>
+                Categoria
+                <input
+                  placeholder="Todas"
+                  onChange={(e) => setF({ ...f, categoria: e.target.value })}
+                />
+              </label>
+            </div>
+            <label>
+              Visão financeira
+              <select
+                value={f.visaoFinanceira ?? "AMBOS"}
+                onChange={(e) =>
+                  setF({ ...f, visaoFinanceira: e.target.value })
+                }
+              >
+                <option value="AMBOS">Realizado + projetado</option>
+                <option value="REALIZADO">Somente realizado</option>
+                <option value="PROJETADO">Somente projetado</option>
               </select>
             </label>
             <label>
@@ -316,12 +355,71 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </label>
             <label>
               Tipo de movimento
-              <select value={f.tipoMovimento}>
+              <select
+                value={f.tipoMovimento}
+                onChange={(e) => setF({ ...f, tipoMovimento: e.target.value })}
+              >
                 <option value="AMBOS">Entradas e saídas</option>
                 <option>Entradas</option>
                 <option>Saídas</option>
               </select>
             </label>
+            <div className="duplo">
+              <label>
+                Pessoa
+                <input
+                  placeholder="Todas"
+                  onChange={(e) => setF({ ...f, pessoa: e.target.value })}
+                />
+              </label>
+              <label>
+                Analítica
+                <input
+                  placeholder="Todas"
+                  onChange={(e) => setF({ ...f, analitica: e.target.value })}
+                />
+              </label>
+            </div>
+            <div className="duplo">
+              <label>
+                Situação
+                <input
+                  placeholder="Todas"
+                  onChange={(e) => setF({ ...f, situacao: e.target.value })}
+                />
+              </label>
+              <label>
+                Origem
+                <input
+                  placeholder="Todas"
+                  onChange={(e) => setF({ ...f, origem: e.target.value })}
+                />
+              </label>
+            </div>
+            <fieldset className="formasPrevisao">
+              <legend>Formas da previsão</legend>
+              {[
+                ["DINHEIRO", "Dinheiro"],
+                ["PIX", "PIX"],
+                ["CARTAO_DEBITO", "Cartão débito"],
+              ].map(([v, l]) => (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={f.formasPrevisao.includes(v)}
+                    onChange={(e) =>
+                      setF({
+                        ...f,
+                        formasPrevisao: e.target.checked
+                          ? [...f.formasPrevisao, v]
+                          : f.formasPrevisao.filter((x: string) => x !== v),
+                      })
+                    }
+                  />
+                  {l}
+                </label>
+              ))}
+            </fieldset>
             <label className="busca">
               <Search />
               <input placeholder="Pessoa, analítica, situação..." />
@@ -361,6 +459,19 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 <p>Visão operacional e projetada do caixa</p>
               </div>
               <div className="acoes">
+                <div className="empresaTopo">
+                  <img
+                    src={empresaAtiva?.caminho_logo || "/brand/logo-s-novo.jpg"}
+                  />
+                  <div>
+                    <small>Empresa ativa</small>
+                    <b>
+                      {empresaAtiva?.nome_exibido ||
+                        empresaAtiva?.nome_fantasia ||
+                        "Control S"}
+                    </b>
+                  </div>
+                </div>
                 <span>Atualizado {id ? "agora" : "—"}</span>
                 <button
                   className="botaoFiltros"
@@ -397,13 +508,36 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               </div>
             </header>
             <div className="periodosRapidos">
-              <button onClick={() => definirPeriodo(1)}>Hoje</button>
-              <button onClick={() => definirPeriodo(7)}>7 dias</button>
-              <button onClick={() => definirPeriodo(30)}>30 dias</button>
-              <button onClick={() => definirPeriodo(7, "SEMANA")}>
+              <button
+                className={periodoRapido === "HOJE" ? "ativo" : ""}
+                onClick={() => definirPeriodo(1, "DIA", "HOJE")}
+              >
+                Hoje
+              </button>
+              <button
+                className={periodoRapido === "7_DIAS" ? "ativo" : ""}
+                onClick={() => definirPeriodo(7, "DIA", "7_DIAS")}
+              >
+                7 dias
+              </button>
+              <button
+                className={periodoRapido === "30_DIAS" ? "ativo" : ""}
+                onClick={() => definirPeriodo(30, "DIA", "30_DIAS")}
+              >
+                30 dias
+              </button>
+              <button
+                className={periodoRapido === "SEMANA" ? "ativo" : ""}
+                onClick={() => definirPeriodo(7, "SEMANA", "SEMANA")}
+              >
                 Semana
               </button>
-              <button onClick={() => definirPeriodo(31, "MÊS")}>Mês</button>
+              <button
+                className={periodoRapido === "MES" ? "ativo" : ""}
+                onClick={() => definirPeriodo(31, "MÊS", "MES")}
+              >
+                Mês
+              </button>
               <span>
                 {new Date(f.dataInicial + "T12:00").toLocaleDateString("pt-BR")}{" "}
                 — {new Date(f.dataFinal + "T12:00").toLocaleDateString("pt-BR")}
@@ -683,12 +817,50 @@ export function Gestao({ onSair }: { onSair: () => void }) {
 }
 function Fontes() {
   const [fontes, setFontes] = useState<any[]>([]),
-    [selecionada, setSelecionada] = useState<any>();
+    [selecionada, setSelecionada] = useState<any>(),
+    [retorno, setRetorno] = useState("");
   useEffect(() => {
     api<any[]>("/gestao/fontes-dados").then(setFontes);
   }, []);
   async function abrir(id: number) {
+    setRetorno("");
     setSelecionada(await api(`/gestao/fontes-dados/${id}`));
+  }
+  async function salvarFonte() {
+    await api(`/gestao/fontes-dados/${selecionada.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        nome: selecionada.nome,
+        descricao: selecionada.descricao,
+        sqlTexto: selecionada.sql_texto,
+        parametros: selecionada.parametros_json,
+      }),
+    });
+    setRetorno("Nova versão salva com sucesso.");
+  }
+  async function testarFonte() {
+    try {
+      const r = await api<any>(
+        `/gestao/fontes-dados/${selecionada.id}/testar`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            parametros: selecionada.parametros_json ?? {},
+          }),
+        },
+      );
+      setRetorno(
+        `Teste concluído: ${r.quantidadeLinhas} linha(s) em ${r.tempoMs} ms.`,
+      );
+    } catch (e: any) {
+      setRetorno(e.message);
+    }
+  }
+  async function publicarFonte() {
+    await api(`/gestao/fontes-dados/${selecionada.id}/publicar`, {
+      method: "POST",
+    });
+    setRetorno("Fonte publicada com sucesso.");
   }
   return (
     <main className="conteudo fontes">
@@ -703,7 +875,10 @@ function Fontes() {
       </header>
       <section className="painel fonteLista">
         <header>
-          <h2>Fontes publicadas</h2>
+          <div>
+            <h2>Catálogo completo de fontes</h2>
+            <p>{fontes.length} fontes Oracle confirmadas e versionadas</p>
+          </div>
         </header>
         {fontes.map((f) => (
           <button onClick={() => abrir(f.id)}>
@@ -734,23 +909,14 @@ function Fontes() {
               setSelecionada({ ...selecionada, sql_texto: e.target.value })
             }
           />
+          {retorno && <div className="editorRetorno">{retorno}</div>}
           <footer>
             <span>Somente consultas SELECT parametrizadas</span>
-            <button
-              onClick={() =>
-                api(`/gestao/fontes-dados/${selecionada.id}`, {
-                  method: "PUT",
-                  body: JSON.stringify({
-                    nome: selecionada.nome,
-                    descricao: selecionada.descricao,
-                    sqlTexto: selecionada.sql_texto,
-                    parametros: selecionada.parametros_json,
-                  }),
-                })
-              }
-            >
-              Salvar nova versão
-            </button>
+            <div className="editorAcoes">
+              <button onClick={testarFonte}>Testar SQL</button>
+              <button onClick={salvarFonte}>Salvar versão</button>
+              <button onClick={publicarFonte}>Publicar</button>
+            </div>
           </footer>
         </section>
       )}

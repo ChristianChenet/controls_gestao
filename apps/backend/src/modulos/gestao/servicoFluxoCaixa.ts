@@ -72,9 +72,9 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
     ],
   );
   try {
-    if (!oracleConfigurado())
+    if (!(await oracleConfigurado()))
       throw new Error(
-        "Oracle não configurado. Configure o .env para processar dados reais.",
+        "Oracle não configurado. Cadastre a conexão em Configurações > Conexão Oracle.",
       );
     const saldoFonte = await fonte("oracle_fluxo_saldo_portador"),
       movFonte = await fonte("oracle_fluxo_movimentos_detalhe"),

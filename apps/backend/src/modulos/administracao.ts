@@ -1,4 +1,9 @@
 import { consultar, consultarUm } from "../banco/conexao.js";
+import { ambiente } from "../configuracao/ambiente.js";
+import {
+  reiniciarPoolOracle,
+  testarOracleConfiguracao,
+} from "../banco/oracle.js";
 
 export async function buscarUsuariosPorLogin(login: string) {
   const id = login.trim().toLowerCase(),
@@ -48,11 +53,11 @@ export async function permissoesUsuario(id: number, empresaId: number) {
 }
 export const listarEmpresas = () =>
   consultar(
-    "SELECT id,codigo_empresa,razao_social,nome_fantasia,cnpj,dominio_publico,nome_exibido,caminho_logo,caminho_imagem_fundo,ativa FROM empresas WHERE excluido=FALSE ORDER BY nome_fantasia",
+    "SELECT id,codigo_empresa,razao_social,nome_fantasia,cnpj,dominio_publico,nome_exibido,caminho_logo,caminho_imagem_fundo,cor_primaria,cor_secundaria,ativa FROM empresas WHERE excluido=FALSE ORDER BY nome_fantasia",
   );
 export async function salvarEmpresa(b: any, uid: number) {
   return consultarUm(
-    `INSERT INTO empresas(codigo_empresa,razao_social,nome_fantasia,cnpj,dominio_publico,nome_exibido,caminho_logo,caminho_imagem_fundo,ativa,criado_por_usuario_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,TRUE),$10) ON CONFLICT(codigo_empresa) DO UPDATE SET razao_social=EXCLUDED.razao_social,nome_fantasia=EXCLUDED.nome_fantasia,cnpj=EXCLUDED.cnpj,dominio_publico=EXCLUDED.dominio_publico,nome_exibido=EXCLUDED.nome_exibido,caminho_logo=EXCLUDED.caminho_logo,caminho_imagem_fundo=EXCLUDED.caminho_imagem_fundo,ativa=EXCLUDED.ativa,alterado_em=NOW(),alterado_por_usuario_id=$10 RETURNING *`,
+    `INSERT INTO empresas(codigo_empresa,razao_social,nome_fantasia,cnpj,dominio_publico,nome_exibido,caminho_logo,caminho_imagem_fundo,cor_primaria,cor_secundaria,ativa,criado_por_usuario_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,TRUE),$12) ON CONFLICT(codigo_empresa) DO UPDATE SET razao_social=EXCLUDED.razao_social,nome_fantasia=EXCLUDED.nome_fantasia,cnpj=EXCLUDED.cnpj,dominio_publico=EXCLUDED.dominio_publico,nome_exibido=EXCLUDED.nome_exibido,caminho_logo=EXCLUDED.caminho_logo,caminho_imagem_fundo=EXCLUDED.caminho_imagem_fundo,cor_primaria=EXCLUDED.cor_primaria,cor_secundaria=EXCLUDED.cor_secundaria,ativa=EXCLUDED.ativa,alterado_em=NOW(),alterado_por_usuario_id=$12 RETURNING *`,
     [
       b.codigo_empresa,
       b.razao_social,
@@ -62,6 +67,8 @@ export async function salvarEmpresa(b: any, uid: number) {
       b.nome_exibido ?? b.nome_fantasia,
       b.caminho_logo ?? null,
       b.caminho_imagem_fundo ?? null,
+      b.cor_primaria ?? "#2EE66F",
+      b.cor_secundaria ?? "#101827",
       b.ativa ?? true,
       uid,
     ],
@@ -148,4 +155,57 @@ export async function salvarPermissoesPerfil(
         i.tipo === "ACAO" ? i.referencia_id : null,
       ],
     );
+}
+
+export const listarConexoesOracle = () =>
+  consultar(
+    "SELECT id,nome,host,porta,servico,usuario,ativa,ultimo_teste_em,ultimo_teste_sucesso,ultimo_teste_mensagem,criado_em,atualizado_em FROM gestao_conexao_oracle ORDER BY ativa DESC,nome",
+  );
+export async function salvarConexaoOracle(b: any) {
+  await reiniciarPoolOracle();
+  if (b.id)
+    return consultarUm(
+      `UPDATE gestao_conexao_oracle SET nome=$2,host=$3,porta=$4,servico=$5,usuario=$6,senha_criptografada=CASE WHEN NULLIF($7,'') IS NULL THEN senha_criptografada ELSE PGP_SYM_ENCRYPT($7,$8) END,ativa=$9,atualizado_em=NOW() WHERE id=$1 RETURNING id,nome,host,porta,servico,usuario,ativa`,
+      [
+        b.id,
+        b.nome,
+        b.host,
+        Number(b.porta || 1521),
+        b.servico,
+        b.usuario,
+        b.senha ?? null,
+        ambiente.jwtSecret,
+        b.ativa !== false,
+      ],
+    );
+  return consultarUm(
+    `INSERT INTO gestao_conexao_oracle(nome,host,porta,servico,usuario,senha_criptografada,ativa) VALUES($1,$2,$3,$4,$5,PGP_SYM_ENCRYPT($6,$7),$8) RETURNING id,nome,host,porta,servico,usuario,ativa`,
+    [
+      b.nome,
+      b.host,
+      Number(b.porta || 1521),
+      b.servico,
+      b.usuario,
+      b.senha,
+      ambiente.jwtSecret,
+      b.ativa !== false,
+    ],
+  );
+}
+export async function testarConexaoOracle(id: number) {
+  await reiniciarPoolOracle();
+  try {
+    const resultado: any = await testarOracleConfiguracao(id);
+    await consultar(
+      "UPDATE gestao_conexao_oracle SET ultimo_teste_em=NOW(),ultimo_teste_sucesso=TRUE,ultimo_teste_mensagem='Conexão realizada com sucesso' WHERE id=$1",
+      [id],
+    );
+    return { sucesso: true, dataServidor: resultado.rows?.[0]?.DATA_SERVIDOR };
+  } catch (e: any) {
+    await consultar(
+      "UPDATE gestao_conexao_oracle SET ultimo_teste_em=NOW(),ultimo_teste_sucesso=FALSE,ultimo_teste_mensagem=$2 WHERE id=$1",
+      [id, e.message],
+    );
+    throw e;
+  }
 }

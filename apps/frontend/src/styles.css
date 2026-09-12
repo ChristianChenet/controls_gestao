@@ -20,29 +20,53 @@ textarea {
 .app {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 82px 1fr;
+  grid-template-columns: 238px minmax(0, 1fr);
   background: #f4f7f6;
 }
 .nav {
-  background: #092f38;
+  background: #070b0d;
   color: white;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px 10px;
+  align-items: stretch;
+  padding: 22px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
   z-index: 5;
 }
 .nav img {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  align-self: center;
   border-radius: 13px;
   object-fit: cover;
 }
+.marcaProduto {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 8px 22px;
+  border-bottom: 1px solid #ffffff14;
+  margin-bottom: 20px;
+}
+.marcaProduto img {
+  align-self: auto;
+}
+.marcaProduto div {
+  display: grid;
+}
+.marcaProduto strong {
+  font-size: 16px;
+}
+.marcaProduto span {
+  color: #43df7e;
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
 .marca {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-align: center;
   margin: 10px 0 28px;
@@ -62,20 +86,21 @@ textarea {
   background: transparent;
   color: #a8c1c4;
   border-radius: 13px;
-  padding: 12px 4px;
-  font-size: 10px;
+  padding: 12px 14px;
+  font-size: 12px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 11px;
   cursor: pointer;
 }
 .nav button svg {
   width: 21px;
 }
 .nav button.ativo {
-  background: #15505a;
+  background: linear-gradient(135deg, #123f45, #17614f);
   color: #fff;
+  box-shadow: inset 3px 0 #38e477;
 }
 .nav .sair {
   margin-top: auto;
@@ -152,8 +177,32 @@ textarea {
 }
 .atalhos {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 5px;
+}
+.formasPrevisao {
+  margin-top: 18px;
+  border: 1px solid #dce6e4;
+  border-radius: 9px;
+  padding: 9px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.formasPrevisao legend {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4f686d;
+}
+.formasPrevisao label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 10px;
+}
+.formasPrevisao input {
+  width: auto;
 }
 .atalhos button,
 .segmentado button {
@@ -265,6 +314,12 @@ textarea {
   background: #dff8eb;
   border-color: #61cf9b;
 }
+.periodosRapidos button.ativo {
+  background: #16a05f;
+  color: #fff;
+  border-color: #16a05f;
+  font-weight: 700;
+}
 .periodosRapidos span {
   margin-left: auto;
   font-size: 11px;
@@ -303,6 +358,33 @@ textarea {
   display: flex;
   align-items: center;
   gap: 9px;
+}
+.empresaTopo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-right: 1px solid #d8e3e1;
+  padding-right: 12px;
+}
+.empresaTopo img {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #e1e9e7;
+}
+.empresaTopo div {
+  display: grid;
+}
+.empresaTopo small {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: #84979b;
+}
+.empresaTopo b {
+  font-size: 11px;
+  white-space: nowrap;
 }
 .acoes span {
   color: #87999d;
@@ -896,6 +978,93 @@ textarea {
   border-radius: 8px;
   padding: 10px;
 }
+.adminModal form select,
+.seletoresDireitos select {
+  border: 1px solid #d8e3e1;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+.adminLinha {
+  display: flex;
+  border-bottom: 1px solid #edf1f0;
+}
+.adminLinha > button:first-child {
+  flex: 1;
+  border: 0;
+  background: #fff;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  text-align: left;
+}
+.adminLinha > button:first-child div {
+  flex: 1;
+  display: grid;
+}
+.adminLinha span {
+  font-size: 10px;
+  color: #7d9195;
+}
+.testarConexao {
+  border: 0;
+  border-left: 1px solid #edf1f0;
+  background: #f7faf9;
+  color: #08724c;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.testarConexao svg {
+  width: 15px;
+}
+.matrizPermissoes {
+  max-width: 1000px;
+}
+.matrizPermissoes .primary {
+  border: 0;
+  border-radius: 8px;
+  background: #0d9564;
+  color: #fff;
+  padding: 9px 13px;
+  display: flex;
+  gap: 6px;
+}
+.seletoresDireitos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 18px;
+}
+.seletoresDireitos label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+}
+.listaPermissoes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  padding: 0 18px 18px;
+  gap: 7px;
+}
+.listaPermissoes label {
+  border: 1px solid #e1e9e7;
+  border-radius: 9px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.listaPermissoes label div {
+  flex: 1;
+  display: grid;
+}
+.listaPermissoes span,
+.listaPermissoes em {
+  font-size: 9px;
+  color: #7d9195;
+}
 .adminModal .check {
   display: flex;
   align-items: center;
@@ -991,6 +1160,18 @@ textarea {
   color: #fff;
   font-weight: 700;
 }
+.editorAcoes {
+  display: flex;
+  gap: 7px;
+}
+.editorRetorno {
+  background: #102f35;
+  border: 1px solid #31535a;
+  border-radius: 8px;
+  padding: 10px;
+  color: #bdebd4;
+  font-size: 11px;
+}
 @media (max-width: 1250px) {
   .cards {
     grid-template-columns: repeat(3, 1fr);
@@ -1001,16 +1182,47 @@ textarea {
 }
 @media (max-width: 900px) {
   .app {
-    grid-template-columns: 65px 1fr;
+    display: block;
+  }
+  .nav {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    height: 70px;
+    padding: 7px 8px;
+    z-index: 70;
+    flex-direction: row;
+    align-items: center;
+  }
+  .nav > .marcaProduto,
+  .nav > .marca,
+  .nav > .sair {
+    display: none;
+  }
+  .nav nav {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+  }
+  .nav button {
+    justify-content: center;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 3px;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  .nav button svg {
+    width: 18px;
+    height: 18px;
   }
   .filtros {
     width: min(380px, 100vw);
   }
   .conteudo {
-    padding: 20px;
+    padding: 18px 14px 90px;
   }
   .cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   .linhaPaineis {
     grid-template-columns: 1fr;
@@ -1025,9 +1237,60 @@ textarea {
     width: 100%;
   }
   .fontes {
-    grid-column: 2;
+    grid-column: auto;
+  }
+  .administracao {
+    grid-column: auto;
+  }
+  .topo {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .topo h1 {
+    font-size: 23px;
+  }
+  .acoes {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .empresaTopo {
+    display: none;
+  }
+  .periodosRapidos span {
+    width: 100%;
+    margin-left: 0;
+  }
+  .abasAdmin {
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .abasAdmin button {
+    white-space: nowrap;
   }
   .editor {
-    width: calc(100% - 65px);
+    width: 100%;
+  }
+}
+@media (max-width: 560px) {
+  .topo {
+    display: block;
+  }
+  .acoes {
+    margin-top: 12px;
+    justify-content: flex-start;
+  }
+  .calendario {
+    grid-template-columns: repeat(2, minmax(125px, 1fr));
+  }
+  .periodosRapidos {
+    gap: 5px;
+  }
+  .periodosRapidos button {
+    flex: 1;
+    min-width: 62px;
+  }
+  .adminModal form {
+    max-height: 92vh;
+    overflow: auto;
   }
 }

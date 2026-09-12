@@ -19,11 +19,14 @@ import {
   listarPerfis,
   listarPermissoesPerfil,
   listarUsuarios,
+  listarConexoesOracle,
   permissoesUsuario,
   salvarEmpresa,
   salvarPerfil,
   salvarPermissoesPerfil,
   salvarUsuario,
+  salvarConexaoOracle,
+  testarConexaoOracle,
   verificarSenhaUsuario,
 } from "./modulos/administracao.js";
 
@@ -248,6 +251,25 @@ export async function criarApp() {
         b.itens ?? [],
       );
       return sucesso({ salvo: true });
+    },
+  );
+  app.get("/api/admin/conexoes-oracle", { preHandler: admin }, async () =>
+    sucesso(await listarConexoesOracle()),
+  );
+  app.post("/api/admin/conexoes-oracle", { preHandler: admin }, async (req) =>
+    sucesso(await salvarConexaoOracle(req.body)),
+  );
+  app.post(
+    "/api/admin/conexoes-oracle/:id/testar",
+    { preHandler: admin },
+    async (req, res) => {
+      try {
+        return sucesso(
+          await testarConexaoOracle(Number((req.params as any).id)),
+        );
+      } catch (e: any) {
+        return res.code(422).send(falha("ORACLE_INDISPONIVEL", e.message));
+      }
     },
   );
   app.get(
