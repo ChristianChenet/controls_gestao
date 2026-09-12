@@ -110,6 +110,31 @@ textarea {
 }
 .menuRecolhido .nav {
   padding-inline: 8px;
+  align-items: center;
+}
+.menuRecolhido .nav nav,
+.menuRecolhido .nav button {
+  width: 100%;
+}
+.menuRecolhido .nav nav {
+  justify-items: center;
+}
+.menuRecolhido .nav button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 42px;
+  padding: 0;
+  gap: 0;
+}
+.menuRecolhido .nav button svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+.menuRecolhido .marcaProduto img {
+  width: 40px;
+  height: 40px;
 }
 .nav .recolherMenu {
   margin-top: auto;
@@ -385,6 +410,53 @@ textarea {
   margin: -10px 0 18px;
   flex-wrap: wrap;
 }
+.barraConsulta {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin: -10px 0 18px;
+  overflow-x: auto;
+  padding: 1px 0 8px;
+}
+.barraConsulta .periodosRapidos,
+.barraConsulta .seletoresEscopo,
+.barraConsulta .visoesFluxo {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex-wrap: nowrap;
+}
+.barraConsulta .periodosRapidos span {
+  display: none;
+}
+.barraConsulta .seletoresEscopo label {
+  min-width: 175px;
+}
+.barraConsulta .visoesFluxo {
+  align-items: end;
+}
+.seletoresEscopo {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  margin: -8px 0 18px;
+  flex-wrap: wrap;
+}
+.seletoresEscopo label {
+  display: grid;
+  gap: 4px;
+  color: #61777b;
+  font-size: 10px;
+  min-width: 220px;
+}
+.seletoresEscopo select {
+  border: 1px solid #d3e0dd;
+  background: #fff;
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: #27545b;
+}
 .periodosRapidos button {
   border: 1px solid #d8e3e1;
   border-radius: 16px;
@@ -456,25 +528,118 @@ textarea {
 }
 .empresaTopo {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 2px;
   border-right: 1px solid #d8e3e1;
   padding: 8px 14px 8px 8px;
-  min-width: 410px;
-  min-height: 124px;
+  min-width: 270px;
+  min-height: 102px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
   width: 230px;
-  height: 108px;
-  flex: 1 1 230px;
+  height: 78px;
+  flex: 1 1 auto;
   margin: auto;
   border-radius: 8px;
   object-fit: contain;
   object-position: center;
   background: transparent;
   border: 0;
+}
+.usuarioRodape {
+  position: fixed;
+  right: 18px;
+  bottom: 10px;
+  z-index: 12;
+  padding: 5px 11px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #536f74;
+  font-size: 10px;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(18, 61, 70, 0.08);
+}
+.visoesFluxo {
+  display: flex;
+  gap: 7px;
+  margin: 0 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #d8e3e1;
+  overflow-x: auto;
+}
+.visoesFluxo button {
+  border: 1px solid #d3e0dd;
+  background: rgba(255, 255, 255, 0.82);
+  color: #31585f;
+  border-radius: 9px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.visoesFluxo button.ativo {
+  background: #18b83f;
+  border-color: #18b83f;
+  color: #fff;
+  font-weight: 700;
+}
+.cabecalhoVisao {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.cabecalhoVisao h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.cabecalhoVisao p {
+  margin: 2px 0 0;
+  color: #70858a;
+  font-size: 10px;
+}
+.ocultaVisao {
+  display: none !important;
+}
+.acoesVisao {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.acoesVisao button,
+.acoesVisao a {
+  border: 1px solid #d7e3e0;
+  background: #fff;
+  color: #27545b;
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 10px;
+}
+.acoesVisao svg {
+  width: 14px;
+  height: 14px;
+}
+.maximizadaVisao {
+  position: fixed;
+  inset: 10px;
+  z-index: 80;
+  overflow: auto;
+  border-radius: 9px;
+}
+.fluxoVertical tbody tr {
+  cursor: pointer;
+}
+.fluxoVertical tbody tr:hover td,
+.fluxoVertical tbody tr:hover th {
+  background: #effbef;
 }
 .empresaTopo div {
   display: grid;
@@ -923,6 +1088,14 @@ textarea {
 }
 .fullscreen {
   grid-template-columns: 1fr;
+  display: block;
+  width: 100vw;
+  max-width: none;
+  overflow-x: auto;
+}
+.fullscreen .conteudo {
+  width: 100vw;
+  max-width: none;
 }
 .semAcesso,
 .login {
@@ -1003,6 +1176,13 @@ textarea {
 }
 .administracao {
   grid-column: 2;
+}
+.administracao > .fontes {
+  padding: 0;
+  background: transparent;
+}
+.administracao > .fontes > .topo {
+  display: none;
 }
 .abasAdmin {
   display: flex;

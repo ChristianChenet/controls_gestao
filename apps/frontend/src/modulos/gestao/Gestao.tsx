@@ -27,7 +27,14 @@ type Dia = {
   data_fluxo: string;
   disponivel_inicial: number;
   entradas_previstas: number;
+  entradas_realizadas: number;
   saidas_previstas: number;
+  saidas_realizadas: number;
+  receitas_financeiras: number;
+  pagamentos_fornecedores: number;
+  pagamentos_despesas: number;
+  investimentos: number;
+  amortizacao_emprestimos: number;
   previsao_inteligente: number;
   movimento_liquido: number;
   saldo_projetado: number;
@@ -60,6 +67,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     [resumo, setResumo] = useState<any>({}),
     [insights, setInsights] = useState<any[]>([]),
     [detalhes, setDetalhes] = useState<any[]>([]),
+    [gruposFiliais, setGruposFiliais] = useState<any[]>([]),
     [dia, setDia] = useState<Dia>(),
     [erro, setErro] = useState(""),
     [carregando, setCarregando] = useState(false),
@@ -69,6 +77,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       localStorage.getItem("controlSGestaoMenuRecolhido") === "true",
     ),
     [periodoRapido, setPeriodoRapido] = useState("30_DIAS"),
+    [visaoPrincipal, setVisaoPrincipal] = useState<
+      "DASHBOARD" | "CALENDARIO" | "HORIZONTAL" | "VERTICAL"
+    >("DASHBOARD"),
     [filtrosAbertos, setFiltrosAbertos] = useState(false),
     [aba, setAba] = useState<"fluxo" | "fontes" | "administracao">("fluxo");
   const usuario = JSON.parse(localStorage.getItem("gestao_usuario") ?? "{}");
@@ -78,6 +89,38 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     usuario.administrador ||
     usuario.permissoes?.includes("*") ||
     usuario.permissoes?.includes(p);
+  useEffect(() => {
+    if (pode("gestao.grupo_filial.visualizar"))
+      api<any[]>("/gestao/grupos-filiais")
+        .then(setGruposFiliais)
+        .catch(() => {});
+  }, []);
+  const estabelecimentos = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          gruposFiliais
+            .flatMap((g) => g.itens ?? [])
+            .map((x: any) => [x.estab_oracle, x]),
+        ).values(),
+      ) as any[],
+    [gruposFiliais],
+  );
+  const acoesDaVisao = (podeDetalhar = true) => (
+    <div className="acoesVisao">
+      {podeDetalhar && dias[0] && (
+        <button onClick={() => setDia(dias[0])}>Ver detalhes</button>
+      )}
+      <button onClick={() => setGradeMaximizada(!gradeMaximizada)}>
+        <Expand /> {gradeMaximizada ? "Restaurar" : "Expandir"}
+      </button>
+      {id && pode("gestao.fluxo_caixa.exportar_excel") && (
+        <button onClick={exportarExcel}>
+          <Download /> Excel
+        </button>
+      )}
+    </div>
+  );
   async function processar() {
     setCarregando(true);
     setErro("");
@@ -107,6 +150,23 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       setCarregando(false);
     }
   }
+  async function exportarExcel() {
+    if (!id) return;
+    const r = await fetch(
+      `${BASE}/gestao/fluxo-caixa/processos/${id}/exportar-excel`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("controlSHubToken")}`,
+        },
+      },
+    );
+    if (!r.ok) throw new Error("Não foi possível exportar o fluxo.");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = `fluxo-caixa-${id}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   const cards = [
     ["Saldo inicial", dias[0]?.disponivel_inicial, WalletCards, "neutro"],
     [
@@ -128,6 +188,21 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       resumo.previsao_inteligente,
       Lightbulb,
       "destaque",
+    ],
+  ] as const;
+  const cardsDashboard = [
+    ...cards,
+    ["Contas a receber", resumo.entradas_previstas, ArrowUpRight, "bom"],
+    ["Contas a pagar", resumo.saidas_previstas, ArrowDownRight, "ruim"],
+    [
+      "Clientes vencidos",
+      detalhes
+        .filter(
+          (x) => x.tipo_movimento === "ENTRADA" && x.vencido_antes_periodo,
+        )
+        .reduce((s, x) => s + Number(x.valor_entrada || 0), 0),
+      ShieldAlert,
+      "ruim",
     ],
   ] as const;
   const max = Math.max(
@@ -214,14 +289,10 @@ export function Gestao({ onSair }: { onSair: () => void }) {
           Sair
         </button>
       </aside>
-      {aba === "fontes" ? (
-        <Fontes />
-      ) : aba === "administracao" ? (
+      {aba === "administracao" ? (
         <Administracao
-          onAbrirFontes={
-            pode("gestao.fonte_dados.visualizar")
-              ? () => setAba("fontes")
-              : undefined
+          fontes={
+            pode("gestao.fonte_dados.visualizar") ? <Fontes /> : undefined
           }
         />
       ) : (
@@ -278,53 +349,6 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               </label>
             </div>
             <label>
-              Escopo
-              <select
-                value={f.escopo ?? "CONSOLIDADO"}
-                onChange={(e) => setF({ ...f, escopo: e.target.value })}
-              >
-                <option value="CONSOLIDADO">Consolidado</option>
-                <option value="LOJA">Loja</option>
-                <option value="GRUPO_FILIAL">Grupo filial</option>
-              </select>
-            </label>
-            <label>
-              Grupo filial
-              <input
-                placeholder="Todos os grupos"
-                onChange={(e) =>
-                  setF({
-                    ...f,
-                    grupoFilialId: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-                }
-              />
-            </label>
-            <label>
-              Empresa
-              <select>
-                <option>Todas as empresas</option>
-              </select>
-            </label>
-            <div className="duplo">
-              <label>
-                Centro de custo
-                <input
-                  placeholder="Todos"
-                  onChange={(e) => setF({ ...f, centroCusto: e.target.value })}
-                />
-              </label>
-              <label>
-                Categoria
-                <input
-                  placeholder="Todas"
-                  onChange={(e) => setF({ ...f, categoria: e.target.value })}
-                />
-              </label>
-            </div>
-            <label>
               Visão financeira
               <select
                 value={f.visaoFinanceira ?? "AMBOS"}
@@ -336,18 +360,6 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 <option value="REALIZADO">Somente realizado</option>
                 <option value="PROJETADO">Somente projetado</option>
               </select>
-            </label>
-            <label>
-              Loja
-              <input
-                placeholder="Todas as lojas"
-                onChange={(e) =>
-                  setF({
-                    ...f,
-                    estab: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              />
             </label>
             <label>
               Portador / conta
@@ -387,14 +399,28 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 Pessoa
                 <input
                   placeholder="Todas"
-                  onChange={(e) => setF({ ...f, pessoa: e.target.value })}
+                  type="number"
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      idPessoa: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
                 />
               </label>
               <label>
                 Analítica
                 <input
                   placeholder="Todas"
-                  onChange={(e) => setF({ ...f, analitica: e.target.value })}
+                  type="number"
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      idAnalitica: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
                 />
               </label>
             </div>
@@ -403,15 +429,29 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 Situação
                 <input
                   placeholder="Todas"
-                  onChange={(e) => setF({ ...f, situacao: e.target.value })}
+                  type="number"
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      idSituacao: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
                 />
               </label>
               <label>
                 Origem
-                <input
-                  placeholder="Todas"
-                  onChange={(e) => setF({ ...f, origem: e.target.value })}
-                />
+                <select
+                  value={f.origem ?? ""}
+                  onChange={(e) =>
+                    setF({ ...f, origem: e.target.value || null })
+                  }
+                >
+                  <option value="">Todas</option>
+                  <option value="DUPREC">Contas a receber</option>
+                  <option value="DUPPAG">Contas a pagar</option>
+                </select>
               </label>
             </div>
             <fieldset className="formasPrevisao">
@@ -501,14 +541,6 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   <img
                     src={empresaAtiva?.caminho_logo || "/brand/logo-s-novo.jpg"}
                   />
-                  <div>
-                    <small>Empresa ativa</small>
-                    <b>
-                      {empresaAtiva?.nome_exibido ||
-                        empresaAtiva?.nome_fantasia ||
-                        "Control S"}
-                    </b>
-                  </div>
                 </div>
                 <span>Atualizado {id ? "agora" : "—"}</span>
                 <button
@@ -522,18 +554,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     href={`${BASE}/gestao/fluxo-caixa/processos/${id}/exportar-excel`}
                     onClick={(e) => {
                       e.preventDefault();
-                      fetch(e.currentTarget.href, {
-                        headers: {
-                          Authorization: `Bearer ${localStorage.getItem("controlSHubToken")}`,
-                        },
-                      })
-                        .then((r) => r.blob())
-                        .then((b) => {
-                          const a = document.createElement("a");
-                          a.href = URL.createObjectURL(b);
-                          a.download = `fluxo-caixa-${id}.xlsx`;
-                          a.click();
-                        });
+                      exportarExcel().catch((x) => setErro(x.message));
                     }}
                   >
                     <Download />
@@ -545,42 +566,126 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 </button>
               </div>
             </header>
-            <div className="periodosRapidos">
-              <button
-                className={periodoRapido === "HOJE" ? "ativo" : ""}
-                onClick={() => definirPeriodo(1, "DIA", "HOJE")}
-              >
-                Hoje
-              </button>
-              <button
-                className={periodoRapido === "7_DIAS" ? "ativo" : ""}
-                onClick={() => definirPeriodo(7, "DIA", "7_DIAS")}
-              >
-                7 dias
-              </button>
-              <button
-                className={periodoRapido === "30_DIAS" ? "ativo" : ""}
-                onClick={() => definirPeriodo(30, "DIA", "30_DIAS")}
-              >
-                30 dias
-              </button>
-              <button
-                className={periodoRapido === "SEMANA" ? "ativo" : ""}
-                onClick={() => definirPeriodo(7, "SEMANA", "SEMANA")}
-              >
-                Semana
-              </button>
-              <button
-                className={periodoRapido === "MES" ? "ativo" : ""}
-                onClick={() => definirPeriodo(31, "MÊS", "MES")}
-              >
-                Mês
-              </button>
-              <span>
-                {new Date(f.dataInicial + "T12:00").toLocaleDateString("pt-BR")}{" "}
-                — {new Date(f.dataFinal + "T12:00").toLocaleDateString("pt-BR")}
-              </span>
+            <div className="barraConsulta">
+              <div className="periodosRapidos">
+                <button
+                  className={periodoRapido === "HOJE" ? "ativo" : ""}
+                  onClick={() => definirPeriodo(1, "DIA", "HOJE")}
+                >
+                  Hoje
+                </button>
+                <button
+                  className={periodoRapido === "7_DIAS" ? "ativo" : ""}
+                  onClick={() => definirPeriodo(7, "DIA", "7_DIAS")}
+                >
+                  7 dias
+                </button>
+                <button
+                  className={periodoRapido === "30_DIAS" ? "ativo" : ""}
+                  onClick={() => definirPeriodo(30, "DIA", "30_DIAS")}
+                >
+                  30 dias
+                </button>
+                <button
+                  className={periodoRapido === "SEMANA" ? "ativo" : ""}
+                  onClick={() => definirPeriodo(7, "SEMANA", "SEMANA")}
+                >
+                  Semana
+                </button>
+                <button
+                  className={periodoRapido === "MES" ? "ativo" : ""}
+                  onClick={() => definirPeriodo(31, "MÊS", "MES")}
+                >
+                  Mês
+                </button>
+                <span>
+                  {new Date(f.dataInicial + "T12:00").toLocaleDateString(
+                    "pt-BR",
+                  )}{" "}
+                  —{" "}
+                  {new Date(f.dataFinal + "T12:00").toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+              <div className="seletoresEscopo">
+                <label>
+                  Grupo filial
+                  <select
+                    value={f.grupoFilialId ?? ""}
+                    onChange={(e) =>
+                      setF({
+                        ...f,
+                        grupoFilialId: e.target.value
+                          ? Number(e.target.value)
+                          : null,
+                        estab: null,
+                      })
+                    }
+                  >
+                    <option value="">Todos os grupos</option>
+                    {gruposFiliais.map((g) => (
+                      <option value={g.id}>{g.nome}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Estabelecimento
+                  <select
+                    value={f.estab ?? ""}
+                    onChange={(e) =>
+                      setF({
+                        ...f,
+                        estab: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                  >
+                    <option value="">Todos os estabelecimentos</option>
+                    {estabelecimentos
+                      .filter(
+                        (x) =>
+                          !f.grupoFilialId ||
+                          x.grupo_filial_id === f.grupoFilialId,
+                      )
+                      .map((x) => (
+                        <option value={x.estab_oracle}>
+                          {x.estab_oracle} -{" "}
+                          {x.nome_filial || "Estabelecimento"}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <nav className="visoesFluxo" aria-label="Visualizações do fluxo">
+                {[
+                  ["DASHBOARD", "Dashboard"],
+                  ["CALENDARIO", "Calendário"],
+                  ["HORIZONTAL", "Horizontal"],
+                  ["VERTICAL", "Vertical"],
+                ].map(([codigo, nome]) => (
+                  <button
+                    className={visaoPrincipal === codigo ? "ativo" : ""}
+                    onClick={() => {
+                      setVisaoPrincipal(codigo as typeof visaoPrincipal);
+                      setGradeMaximizada(false);
+                    }}
+                  >
+                    {nome}
+                  </button>
+                ))}
+              </nav>
             </div>
+            <section
+              className={
+                visaoPrincipal === "DASHBOARD"
+                  ? "cabecalhoVisao"
+                  : "cabecalhoVisao ocultaVisao"
+              }
+            >
+              <div>
+                <h2>Dashboard financeiro</h2>
+                <p>Resumo executivo e indicadores do período</p>
+              </div>
+              {acoesDaVisao()}
+            </section>
             {erro && (
               <div className="aviso">
                 <ShieldAlert />
@@ -591,8 +696,12 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 <X onClick={() => setErro("")} />
               </div>
             )}
-            <section className="cards">
-              {cards.map(([l, v, I, c]) => (
+            <section
+              className={
+                visaoPrincipal === "DASHBOARD" ? "cards" : "cards ocultaVisao"
+              }
+            >
+              {cardsDashboard.map(([l, v, I, c]) => (
                 <article className={c} key={l}>
                   <div>
                     <span>{l}</span>
@@ -607,7 +716,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 </article>
               ))}
             </section>
-            <section className="painel fluxo">
+            <section
+              className={`painel fluxo ${visaoPrincipal !== "CALENDARIO" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizadaVisao" : ""}`}
+            >
               <header>
                 <div>
                   <h2>Calendário financeiro</h2>
@@ -623,6 +734,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </button>
                   ))}
                 </div>
+                {acoesDaVisao()}
               </header>
               {dias.length ? (
                 <div className="calendario">
@@ -665,9 +777,8 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 </div>
               )}
             </section>
-            {dias.length > 0 && (
-              <section
-                className={`painel gradeFluxo ${gradeMaximizada ? "maximizada" : ""}`}
+            <section
+                className={`painel gradeFluxo ${visaoPrincipal !== "HORIZONTAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
               >
                 <header>
                   <div>
@@ -680,6 +791,11 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   >
                     <Expand /> {gradeMaximizada ? "Restaurar" : "Maximizar"}
                   </button>
+                  {id && pode("gestao.fluxo_caixa.exportar_excel") && (
+                    <button className="maximizar" onClick={exportarExcel}>
+                      <Download /> Excel
+                    </button>
+                  )}
                 </header>
                 <div className="gradeRolagem">
                   <table>
@@ -701,10 +817,64 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                         ))}
                       </tr>
                       <tr>
+                        <th>(+) RECEBIMENTO REALIZADO</th>
+                        {dias.map((d) => (
+                          <td className="positivo">
+                            {moeda(d.entradas_realizadas)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(+) RECEITAS FINANCEIRAS / RENDIMENTOS</th>
+                        {dias.map((d) => (
+                          <td className="positivo">
+                            {moeda(d.receitas_financeiras)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
                         <th>(-) CONTAS A PAGAR</th>
                         {dias.map((d) => (
                           <td className="negativo">
                             {moeda(d.saidas_previstas)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(-) PAGAMENTOS REALIZADOS</th>
+                        {dias.map((d) => (
+                          <td className="negativo">
+                            {moeda(d.saidas_realizadas)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(-) PAGAMENTOS FORNECEDORES</th>
+                        {dias.map((d) => (
+                          <td className="negativo">
+                            {moeda(d.pagamentos_fornecedores)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(-) PAGAMENTOS DESPESAS</th>
+                        {dias.map((d) => (
+                          <td className="negativo">
+                            {moeda(d.pagamentos_despesas)}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(-) INVESTIMENTOS / COMPRA DE ATIVOS</th>
+                        {dias.map((d) => (
+                          <td className="negativo">{moeda(d.investimentos)}</td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th>(-) AMORTIZAÇÃO DE EMPRÉSTIMOS</th>
+                        {dias.map((d) => (
+                          <td className="negativo">
+                            {moeda(d.amortizacao_emprestimos)}
                           </td>
                         ))}
                       </tr>
@@ -737,9 +907,78 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tbody>
                   </table>
                 </div>
-              </section>
-            )}
-            <div className="linhaPaineis">
+            </section>
+            <section
+              className={`painel gradeFluxo fluxoVertical ${visaoPrincipal !== "VERTICAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
+            >
+              <header>
+                <div>
+                  <h2>Fluxo de caixa vertical</h2>
+                  <p>Indicadores financeiros organizados por dia</p>
+                </div>
+                {acoesDaVisao()}
+              </header>
+              <div className="gradeRolagem">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>DATA</th>
+                      <th>SALDO INICIAL</th>
+                      <th>RECEBIMENTO PREVISTO</th>
+                      <th>RECEBIMENTO REALIZADO</th>
+                      <th>TOTAL ENTRADAS</th>
+                      <th>PAGAMENTOS PREVISTOS</th>
+                      <th>PAGAMENTOS REALIZADOS</th>
+                      <th>FLUXO LÍQUIDO</th>
+                      <th>SALDO FINAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dias.map((d) => (
+                      <tr onClick={() => setDia(d)}>
+                        <th>{dataBr(d.data_fluxo)}</th>
+                        <td>{moeda(d.disponivel_inicial)}</td>
+                        <td className="positivo">
+                          {moeda(d.entradas_previstas)}
+                        </td>
+                        <td className="positivo">
+                          {moeda(d.entradas_realizadas)}
+                        </td>
+                        <td className="positivo">
+                          {moeda(
+                            Number(d.entradas_previstas) +
+                              Number(d.entradas_realizadas),
+                          )}
+                        </td>
+                        <td className="negativo">
+                          {moeda(d.saidas_previstas)}
+                        </td>
+                        <td className="negativo">
+                          {moeda(d.saidas_realizadas)}
+                        </td>
+                        <td
+                          className={
+                            Number(d.movimento_liquido) < 0
+                              ? "risco"
+                              : "positivo"
+                          }
+                        >
+                          {moeda(d.movimento_liquido)}
+                        </td>
+                        <td>{moeda(d.saldo_projetado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <div
+              className={
+                visaoPrincipal === "DASHBOARD"
+                  ? "linhaPaineis"
+                  : "linhaPaineis ocultaVisao"
+              }
+            >
               <section className="painel tendencia">
                 <header>
                   <div>
@@ -798,6 +1037,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   </div>
                 )}
               </section>
+            </div>
+            <div className="usuarioRodape">
+              Usuário: {usuario.nome || usuario.email || "Conectado"}
             </div>
           </main>
           {dia && (
@@ -952,7 +1194,9 @@ function Fontes() {
           />
           {retorno && <div className="editorRetorno">{retorno}</div>}
           <footer>
-            <span>Somente consultas SELECT parametrizadas</span>
+            <span>
+              SQL e blocos Oracle parametrizados · acesso controlado por perfil
+            </span>
             <div className="editorAcoes">
               <button onClick={testarFonte}>Testar SQL</button>
               <button onClick={salvarFonte}>Salvar versão</button>

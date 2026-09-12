@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import {
   Building2,
   Cable,
@@ -11,19 +11,17 @@ import {
 } from "lucide-react";
 import { api } from "../../servicos/api";
 
-type Aba = "empresas" | "usuarios" | "perfis" | "direitos" | "conexoes";
+type Aba =
+  "fontes" | "empresas" | "usuarios" | "perfis" | "direitos" | "conexoes";
 const abas = [
+  ["fontes", "Fontes de Dados", Database],
   ["empresas", "Empresas", Building2],
   ["usuarios", "Usuários", Users],
   ["perfis", "Perfis", ShieldCheck],
   ["direitos", "Direitos de acesso", ShieldCheck],
   ["conexoes", "Conexão Oracle", Cable],
 ] as const;
-export function Administracao({
-  onAbrirFontes,
-}: {
-  onAbrirFontes?: () => void;
-}) {
+export function Administracao({ fontes }: { fontes?: ReactNode }) {
   const [aba, setAba] = useState<Aba>("empresas"),
     [itens, setItens] = useState<any[]>([]),
     [empresas, setEmpresas] = useState<any[]>([]),
@@ -140,25 +138,23 @@ export function Administracao({
         </div>
       </header>
       <div className="abasAdmin">
-        {onAbrirFontes && (
-          <button onClick={onAbrirFontes}>
-            <Database />
-            Fontes de Dados
-          </button>
-        )}
-        {abas.map(([id, nome, I]) => (
-          <button
-            key={id}
-            className={aba === id ? "ativo" : ""}
-            onClick={() => setAba(id)}
-          >
-            <I />
-            {nome}
-          </button>
-        ))}
+        {abas
+          .filter(([id]) => id !== "fontes" || fontes)
+          .map(([id, nome, I]) => (
+            <button
+              key={id}
+              className={aba === id ? "ativo" : ""}
+              onClick={() => setAba(id)}
+            >
+              <I />
+              {nome}
+            </button>
+          ))}
       </div>
       {erro && <div className="aviso">{erro}</div>}
-      {aba === "direitos" ? (
+      {aba === "fontes" ? (
+        fontes
+      ) : aba === "direitos" ? (
         <section className="painel matrizPermissoes">
           <header>
             <div>

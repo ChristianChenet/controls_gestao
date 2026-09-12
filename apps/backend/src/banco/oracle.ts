@@ -80,16 +80,7 @@ export async function executarOracle<T = Record<string, unknown>>(
   parametros: Record<string, unknown> = {},
   maxRows = 50000,
 ) {
-  if (
-    !/^\s*(select|with)\b/i.test(sql) ||
-    /\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|execute|begin)\b/i.test(
-      sql,
-    )
-  ) {
-    throw new Error(
-      "A fonte de dados aceita somente SELECT ou WITH em modo de leitura.",
-    );
-  }
+  if (!sql.trim()) throw new Error("Informe o comando Oracle a executar.");
   const binds = Object.fromEntries(
     Object.entries(parametros).map(([chave, valor]) => [
       chave,
@@ -103,6 +94,7 @@ export async function executarOracle<T = Record<string, unknown>>(
     const resultado = await conexao.execute(sql, binds, {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
       maxRows,
+      autoCommit: false,
     });
     return (resultado.rows ?? []) as T[];
   } finally {
