@@ -367,7 +367,13 @@ function Empresa({ e }: { e: any }) {
     <>
       <label>
         Código
-        <input name="codigo_empresa" defaultValue={e.codigo_empresa} required />
+        <input
+          type="number"
+          name="codigo_empresa"
+          value={Number(e.codigo_empresa) || 1}
+          readOnly
+          title="Código numérico interno da empresa"
+        />
       </label>
       <label>
         Razão social

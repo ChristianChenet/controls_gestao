@@ -472,6 +472,7 @@ textarea {
   margin: auto;
   border-radius: 8px;
   object-fit: contain;
+  object-position: center;
   background: #fff;
   border: 1px solid #e1e9e7;
 }
