@@ -457,16 +457,19 @@ textarea {
 .empresaTopo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   border-right: 1px solid #d8e3e1;
   padding: 8px 14px 8px 8px;
-  min-width: 330px;
+  min-width: 410px;
+  min-height: 124px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
 }
 .empresaTopo img {
-  width: 148px;
-  height: 92px;
+  width: 230px;
+  height: 108px;
+  flex: 1 1 230px;
+  margin: auto;
   border-radius: 8px;
   object-fit: contain;
   background: #fff;
@@ -474,6 +477,8 @@ textarea {
 }
 .empresaTopo div {
   display: grid;
+  min-width: 130px;
+  align-content: center;
 }
 .empresaTopo small {
   font-size: 8px;
