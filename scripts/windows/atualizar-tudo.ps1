@@ -113,6 +113,23 @@ try {
   Write-Host "[7/7] Instalando e iniciando serviços Windows..."
   & (Join-Path $PSScriptRoot "instalar-servicos.ps1") -SkipBuild
   if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar os serviços Windows." }
+
+  $BackendReady = $false
+  $FrontendReady = $false
+  for ($attempt = 0; $attempt -lt 30; $attempt++) {
+    try {
+      $Health = Invoke-RestMethod -Uri "http://127.0.0.1:3340/saude" -TimeoutSec 2
+      $BackendReady = $Health.status -eq "ok"
+    } catch { $BackendReady = $false }
+    try {
+      $Page = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5175/" -TimeoutSec 2
+      $FrontendReady = $Page.StatusCode -eq 200
+    } catch { $FrontendReady = $false }
+    if ($BackendReady -and $FrontendReady) { break }
+    Start-Sleep -Seconds 1
+  }
+  if (-not $BackendReady) { throw "O serviço interno de login não iniciou. Consulte logs\backend-error.log." }
+  if (-not $FrontendReady) { throw "A interface não iniciou. Consulte logs\frontend-error.log." }
   Start-Process "http://localhost:5175"
   Write-Host "Concluído. Acesse http://localhost:5175"
 } catch {

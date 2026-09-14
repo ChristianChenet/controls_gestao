@@ -8,7 +8,14 @@ const raizProjeto = resolve(pastaAtual, '../..');
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, raizProjeto, '');
-  const alvoApi = env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${env.PORTA_API || 3334}`;
+  const alvoApi = env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${env.PORTA_API || env.PORT || 3340}`;
+  const proxyApi = {
+    '/api': {
+      target: alvoApi,
+      changeOrigin: true,
+      secure: false
+    }
+  };
 
   return {
     envDir: raizProjeto,
@@ -28,15 +35,12 @@ export default defineConfig(({ mode }) => {
         '.ngrok-free.dev',
         'augmented-pouch-monogram.ngrok-free.dev'
       ],
-      proxy: {
-        // Em desenvolvimento local o frontend roda no Vite, mas a API fica no backend.
-        // Em producao/publicacao o Nginx faz esse mesmo papel com /api.
-        '/api': {
-          target: alvoApi,
-          changeOrigin: true,
-          secure: false
-        }
-      }
+      proxy: proxyApi
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 5175,
+      proxy: proxyApi
     }
   };
 });

@@ -41,5 +41,10 @@ try {
   & $Nssm set ControlSGestaoFrontend DependOnService ControlSGestaoBackend
   & $Nssm start ControlSGestaoBackend
   & $Nssm start ControlSGestaoFrontend
+
+  $FirewallRule = Get-NetFirewallRule -DisplayName "Control S Gestão - Aplicação" -ErrorAction SilentlyContinue
+  if (-not $FirewallRule) {
+    New-NetFirewallRule -DisplayName "Control S Gestão - Aplicação" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5175 -Profile Any | Out-Null
+  }
 } finally { Pop-Location }
 Write-Host "Control S Gestão instalado: http://localhost:5175"
