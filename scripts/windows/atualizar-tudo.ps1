@@ -4,15 +4,18 @@ $LogDirectory = Join-Path $ProjectDirectory "logs"
 $LogFile = Join-Path $LogDirectory "atualizador.log"
 $DatabaseName = "control_s_gestao"
 $DatabasePassword = "controls"
+$PortablePostgresRuntime = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\runtime"
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 Start-Transcript -Path $LogFile -Append | Out-Null
 
 function Find-PostgresTool([string]$Tool) {
-  $found = Get-ChildItem -Path @("C:\Program Files\PostgreSQL", (Join-Path $ProjectDirectory "tools\postgresql-portable")) -Filter "$Tool.exe" -Recurse -File -ErrorAction SilentlyContinue |
-    Sort-Object FullName -Descending |
-    Select-Object -First 1
-  if (-not $found) { throw "$Tool não foi localizado após a instalação do PostgreSQL." }
-  return $found.FullName
+  foreach ($root in @("C:\Program Files\PostgreSQL", $PortablePostgresRuntime)) {
+    $found = Get-ChildItem -LiteralPath $root -Filter "$Tool.exe" -Recurse -File -ErrorAction SilentlyContinue |
+      Sort-Object FullName -Descending |
+      Select-Object -First 1
+    if ($found) { return $found.FullName }
+  }
+  throw "$Tool não foi localizado após a instalação do PostgreSQL."
 }
 
 try {
@@ -29,7 +32,7 @@ try {
   }
 
   Write-Host "[2/7] Verificando PostgreSQL..."
-  $Psql = Get-ChildItem -LiteralPath "C:\Program Files\PostgreSQL" -Filter "psql.exe" -Recurse -File -ErrorAction SilentlyContinue |
+  $Psql = Get-ChildItem -Path @("C:\Program Files\PostgreSQL", $PortablePostgresRuntime) -Filter "psql.exe" -Recurse -File -ErrorAction SilentlyContinue |
     Sort-Object FullName -Descending |
     Select-Object -First 1
   if (-not $Psql) {
@@ -42,17 +45,20 @@ try {
         throw "Falha ao instalar os componentes do Windows (código $($RuntimeInstall.ExitCode))."
       }
     }
-    $PortablePostgres = Join-Path $ProjectDirectory "tools\postgresql-portable"
-    if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgres "bin\initdb.exe"))) {
+    $PortablePostgresSource = Join-Path $ProjectDirectory "tools\postgresql-portable"
+    if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgresSource "bin\initdb.exe"))) {
       throw "PostgreSQL não está instalado e o pacote portátil não foi encontrado."
     }
+    New-Item -ItemType Directory -Force -Path $PortablePostgresRuntime | Out-Null
+    Copy-Item -Path (Join-Path $PortablePostgresSource "*") -Destination $PortablePostgresRuntime -Recurse -Force
+    $PortablePostgres = $PortablePostgresRuntime
     $PostgresData = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\data"
     New-Item -ItemType Directory -Force -Path $PostgresData | Out-Null
     if (-not (Test-Path -LiteralPath (Join-Path $PostgresData "PG_VERSION"))) {
       $PasswordFile = Join-Path $env:TEMP "control-s-gestao-pg-password.txt"
-      [IO.File]::WriteAllText($PasswordFile, $DatabasePassword)
+      [IO.File]::WriteAllText($PasswordFile, $DatabasePassword, (New-Object System.Text.UTF8Encoding($false)))
       try {
-        & (Join-Path $PortablePostgres "bin\initdb.exe") -D $PostgresData -U postgres --encoding=UTF8 --auth=scram-sha-256 --pwfile=$PasswordFile
+        & (Join-Path $PortablePostgres "bin\initdb.exe") -D $PostgresData -U postgres --encoding=UTF8 --locale=C --auth=scram-sha-256 --pwfile=$PasswordFile
         if ($LASTEXITCODE -ne 0) { throw "Falha ao inicializar o PostgreSQL portátil." }
       } finally { Remove-Item -LiteralPath $PasswordFile -Force -ErrorAction SilentlyContinue }
     }
