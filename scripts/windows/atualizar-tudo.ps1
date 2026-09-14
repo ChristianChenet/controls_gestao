@@ -16,14 +16,6 @@ function Find-PostgresTool([string]$Tool) {
 }
 
 try {
-  $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
-  if (Test-Path -LiteralPath $RuntimeInstaller) {
-    $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
-    if ($RuntimeInstall.ExitCode -notin @(0, 1638, 3010)) {
-      throw "Falha ao instalar os componentes do Windows (código $($RuntimeInstall.ExitCode))."
-    }
-  }
-
   Write-Host "[1/7] Verificando Node.js..."
   if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
     $NodeInstaller = Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "tools\installers") -Filter "*.msi" -File -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -41,6 +33,15 @@ try {
     Sort-Object FullName -Descending |
     Select-Object -First 1
   if (-not $Psql) {
+    $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
+    if (Test-Path -LiteralPath $RuntimeInstaller) {
+      $RuntimeSignature = Get-AuthenticodeSignature -LiteralPath $RuntimeInstaller
+      if ($RuntimeSignature.Status -ne "Valid") { throw "O instalador dos componentes do Windows está corrompido." }
+      $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
+      if ($RuntimeInstall.ExitCode -notin @(0, 1638, 3010)) {
+        throw "Falha ao instalar os componentes do Windows (código $($RuntimeInstall.ExitCode))."
+      }
+    }
     $PortablePostgres = Join-Path $ProjectDirectory "tools\postgresql-portable"
     if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgres "bin\initdb.exe"))) {
       throw "PostgreSQL não está instalado e o pacote portátil não foi encontrado."
@@ -133,9 +134,10 @@ try {
   Start-Process "http://localhost:5175"
   Write-Host "Concluído. Acesse http://localhost:5175"
 } catch {
-  Write-Error $_
-  exit 1
+  $Failure = $_
+  [Console]::Error.WriteLine("ERRO: $($Failure.Exception.Message)")
 } finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
   Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
 }
+if ($Failure) { exit 1 }

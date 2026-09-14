@@ -55,9 +55,17 @@ export async function criarApp() {
     const usuario = await resolver(login);
     if (!usuario || !(await verificarSenhaUsuario(usuario.id, senha)))
       return null;
-    const empresas = await listarEmpresasDoUsuario(usuario.id),
-      empresa = empresas.find((x: any) => x.padrao) ?? empresas[0],
-      permissoes = empresa
+    let empresas = await listarEmpresasDoUsuario(usuario.id);
+    if (!empresas.length && (usuario.administrador || usuario.superadmin)) {
+      const empresaPadrao = await consultarUm<any>(
+        "SELECT id,codigo_empresa,razao_social,nome_fantasia,nome_exibido,caminho_logo,caminho_imagem_fundo,dominio_publico,TRUE padrao FROM empresas WHERE ativa=TRUE AND excluido=FALSE ORDER BY id LIMIT 1",
+      );
+      empresas = empresaPadrao ? [empresaPadrao] : [];
+    }
+    const empresa = empresas.find((x: any) => x.padrao) ?? empresas[0];
+    const permissoes = usuario.administrador || usuario.superadmin
+      ? ["*"]
+      : empresa
         ? await permissoesUsuario(usuario.id, empresa.id)
         : [];
     return { usuario, empresas, empresa, permissoes };
@@ -91,7 +99,11 @@ export async function criarApp() {
         permissoes: a.permissoes,
       });
     } catch (e: any) {
-      return res.code(409).send(falha("LOGIN_AMBIGUO", e.message));
+      app.log.error(e, "Falha durante o login");
+      const ambiguo = e?.message === "Mais de um usuário encontrado. Informe o e-mail completo.";
+      return res
+        .code(ambiguo ? 409 : 500)
+        .send(falha(ambiguo ? "LOGIN_AMBIGUO" : "ERRO_LOGIN", ambiguo ? e.message : "Não foi possível concluir o login. Consulte o log do serviço."));
     }
   });
   app.post("/api/auth/validar-credenciais", async (req, res) => {
