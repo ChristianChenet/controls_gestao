@@ -5,6 +5,8 @@ $LogFile = Join-Path $LogDirectory "atualizador.log"
 $DatabaseName = "control_s_gestao"
 $DatabasePassword = "controls"
 $PortablePostgresRuntime = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\runtime"
+$NodeInstallerHash = "F0F66C2A80C08A30A5AB5179EE9EA9E45F9B46289436A8CC87FF833B852DB351"
+$RuntimeInstallerHash = "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 Start-Transcript -Path $LogFile -Append | Out-Null
 
@@ -23,11 +25,12 @@ try {
   if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
     $NodeInstaller = Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "tools\installers") -Filter "*.msi" -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($NodeInstaller) {
+      if ((Get-FileHash -LiteralPath $NodeInstaller.FullName -Algorithm SHA256).Hash -ne $NodeInstallerHash) {
+        throw "O instalador offline do Node.js esta corrompido."
+      }
       $NodeInstall = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/i", ('"' + $NodeInstaller.FullName + '"'), "/qn", "/norestart"
-      if ($NodeInstall.ExitCode -notin @(0, 3010)) { throw "Falha ao instalar o Node.js (código $($NodeInstall.ExitCode))." }
-    } elseif (Get-Command winget.exe -ErrorAction SilentlyContinue) {
-      winget install --id OpenJS.NodeJS.LTS --exact --silent --accept-package-agreements --accept-source-agreements
-    } else { throw "Instalador offline do Node.js não encontrado." }
+      if ($NodeInstall.ExitCode -notin @(0, 1641, 3010)) { throw "Falha ao instalar o Node.js (codigo $($NodeInstall.ExitCode))." }
+    } else { throw "Instalador offline do Node.js nao encontrado." }
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
   }
 
@@ -36,15 +39,6 @@ try {
     Sort-Object FullName -Descending |
     Select-Object -First 1
   if (-not $Psql) {
-    $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
-    if (Test-Path -LiteralPath $RuntimeInstaller) {
-      $RuntimeSignature = Get-AuthenticodeSignature -LiteralPath $RuntimeInstaller
-      if ($RuntimeSignature.Status -ne "Valid") { throw "O instalador dos componentes do Windows está corrompido." }
-      $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
-      if ($RuntimeInstall.ExitCode -notin @(0, 1638, 3010)) {
-        throw "Falha ao instalar os componentes do Windows (código $($RuntimeInstall.ExitCode))."
-      }
-    }
     $PortablePostgresSource = Join-Path $ProjectDirectory "tools\postgresql-portable"
     if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgresSource "bin\initdb.exe"))) {
       throw "PostgreSQL não está instalado e o pacote portátil não foi encontrado."
@@ -52,6 +46,23 @@ try {
     New-Item -ItemType Directory -Force -Path $PortablePostgresRuntime | Out-Null
     Copy-Item -Path (Join-Path $PortablePostgresSource "*") -Destination $PortablePostgresRuntime -Recurse -Force
     $PortablePostgres = $PortablePostgresRuntime
+    $PostgresExecutable = Join-Path $PortablePostgres "bin\postgres.exe"
+    $PostgresRuntimeOk = $false
+    try {
+      & $PostgresExecutable --version | Out-Null
+      $PostgresRuntimeOk = $LASTEXITCODE -eq 0
+    } catch { $PostgresRuntimeOk = $false }
+    if (-not $PostgresRuntimeOk) {
+      $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
+      if (-not (Test-Path -LiteralPath $RuntimeInstaller)) { throw "Componentes necessarios do Windows nao foram encontrados." }
+      if ((Get-FileHash -LiteralPath $RuntimeInstaller -Algorithm SHA256).Hash -ne $RuntimeInstallerHash) {
+        throw "O instalador dos componentes do Windows esta corrompido."
+      }
+      $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
+      if ($RuntimeInstall.ExitCode -notin @(0, 1638, 1641, 3010)) {
+        throw "Falha ao instalar os componentes do Windows (codigo $($RuntimeInstall.ExitCode))."
+      }
+    }
     $PostgresData = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\data"
     New-Item -ItemType Directory -Force -Path $PostgresData | Out-Null
     if (-not (Test-Path -LiteralPath (Join-Path $PostgresData "PG_VERSION"))) {
@@ -68,11 +79,13 @@ try {
     }
     Start-Service ControlSGestaoPostgreSQL
     $ready = Join-Path $PortablePostgres "bin\pg_isready.exe"
+    $PostgresReady = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
       & $ready -h localhost -p 5432 | Out-Null
-      if ($LASTEXITCODE -eq 0) { break }
+      if ($LASTEXITCODE -eq 0) { $PostgresReady = $true; break }
       Start-Sleep -Seconds 1
     }
+    if (-not $PostgresReady) { throw "O servico PostgreSQL nao respondeu na porta 5432." }
   }
   $Psql = Find-PostgresTool "psql"
   $PgRestore = Find-PostgresTool "pg_restore"
@@ -80,9 +93,11 @@ try {
 
   Write-Host "[3/7] Preparando banco de dados..."
   $Exists = & $Psql -h localhost -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'"
+  if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel acessar o PostgreSQL com a senha configurada." }
   $NewDatabase = $Exists.Trim() -ne "1"
   if ($NewDatabase) {
     & $Psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DatabaseName"
+    if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel criar o banco de dados da aplicacao." }
     $Backup = Join-Path $ProjectDirectory "database\seed\control_s_gestao.backup"
     if (Test-Path -LiteralPath $Backup) {
       & $PgRestore -h localhost -p 5432 -U postgres -d $DatabaseName --no-owner --no-privileges $Backup
@@ -106,16 +121,12 @@ try {
     else { Copy-Item -LiteralPath (Join-Path $ProjectDirectory ".env.example") -Destination $EnvFile }
   }
 
-  Write-Host "[6/7] Instalando componentes e compilando..."
-  Push-Location $ProjectDirectory
-  try {
-    if (-not (Test-Path -LiteralPath (Join-Path $ProjectDirectory "node_modules"))) {
-      & npm.cmd ci --omit=optional
-      if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar os componentes da aplicação." }
+  Write-Host "[6/7] Verificando arquivos da aplicacao..."
+  foreach ($RequiredPath in @("node_modules\vite\bin\vite.js", "apps\backend\dist\server.js", "apps\frontend\dist\index.html")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ProjectDirectory $RequiredPath))) {
+      throw "Arquivo obrigatorio ausente no pacote: $RequiredPath"
     }
-    & npm.cmd run build
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar a aplicação." }
-  } finally { Pop-Location }
+  }
 
   Write-Host "[7/7] Instalando e iniciando serviços Windows..."
   & (Join-Path $PSScriptRoot "instalar-servicos.ps1") -SkipBuild

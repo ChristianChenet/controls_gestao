@@ -14,6 +14,11 @@ export default defineConfig(({ mode }) => {
       target: alvoApi,
       changeOrigin: true,
       secure: false
+    },
+    '/gestao': {
+      target: alvoApi,
+      changeOrigin: true,
+      secure: false
     }
   };
 
