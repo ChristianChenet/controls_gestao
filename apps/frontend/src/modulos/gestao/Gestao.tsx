@@ -68,6 +68,12 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     [insights, setInsights] = useState<any[]>([]),
     [detalhes, setDetalhes] = useState<any[]>([]),
     [gruposFiliais, setGruposFiliais] = useState<any[]>([]),
+    [opcoesOracle, setOpcoesOracle] = useState<any>({
+      filiais: [],
+      portadores: [],
+      situacoes: [],
+      analiticas: [],
+    }),
     [dia, setDia] = useState<Dia>(),
     [erro, setErro] = useState(""),
     [carregando, setCarregando] = useState(false),
@@ -90,22 +96,26 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     usuario.permissoes?.includes("*") ||
     usuario.permissoes?.includes(p);
   useEffect(() => {
-    if (pode("gestao.grupo_filial.visualizar"))
-      api<any[]>("/gestao/grupos-filiais")
-        .then(setGruposFiliais)
-        .catch(() => {});
+    api<any>("/gestao/fluxo-caixa/filtros-opcoes")
+      .then((opcoes) => {
+        setOpcoesOracle(opcoes);
+        setGruposFiliais(opcoes.grupos ?? []);
+      })
+      .catch(() => {});
   }, []);
-  const estabelecimentos = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          gruposFiliais
-            .flatMap((g) => g.itens ?? [])
-            .map((x: any) => [x.estab_oracle, x]),
-        ).values(),
-      ) as any[],
-    [gruposFiliais],
-  );
+  const estabelecimentos = useMemo(() => {
+    const itens = f.grupoFilialId
+      ? (gruposFiliais.find((g) => g.id === f.grupoFilialId)?.itens ?? [])
+      : opcoesOracle.filiais?.length
+        ? opcoesOracle.filiais.map((x: any) => ({
+            estab_oracle: x.ESTAB,
+            nome_filial: x.ESTABELECIMENTO ?? x.RAZAOSOC,
+          }))
+        : gruposFiliais.flatMap((g) => g.itens ?? []);
+    return Array.from(
+      new Map(itens.map((x: any) => [x.estab_oracle, x])).values(),
+    ) as any[];
+  }, [f.grupoFilialId, gruposFiliais, opcoesOracle]);
   const acoesDaVisao = (podeDetalhar = true) => (
     <div className="acoesVisao">
       {podeDetalhar && dias[0] && (
@@ -363,15 +373,22 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </label>
             <label>
               Portador / conta
-              <input
-                placeholder="Todos os portadores"
+              <select
+                value={f.idPortador ?? ""}
                 onChange={(e) =>
                   setF({
                     ...f,
                     idPortador: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-              />
+              >
+                <option value="">Todos os portadores</option>
+                {opcoesOracle.portadores?.map((x: any) => (
+                  <option value={x.IDPORTADOR}>
+                    {x.ESTAB} · {x.IDPORTADOR} - {x.DESCRICAO}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Saldo
@@ -396,23 +413,28 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </label>
             <div className="duplo">
               <label>
-                Pessoa
-                <input
-                  placeholder="Todas"
-                  type="number"
+                Situação
+                <select
+                  value={f.idSituacao ?? ""}
                   onChange={(e) =>
                     setF({
                       ...f,
-                      idPessoa: e.target.value ? Number(e.target.value) : null,
+                      idSituacao: e.target.value
+                        ? Number(e.target.value)
+                        : null,
                     })
                   }
-                />
+                >
+                  <option value="">Todas</option>
+                  {opcoesOracle.situacoes?.map((x: any) => (
+                    <option value={x.IDSITUACAO}>{x.DESCRICAO}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 Analítica
-                <input
-                  placeholder="Todas"
-                  type="number"
+                <select
+                  value={f.idAnalitica ?? ""}
                   onChange={(e) =>
                     setF({
                       ...f,
@@ -421,21 +443,26 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                         : null,
                     })
                   }
-                />
+                >
+                  <option value="">Todas</option>
+                  {opcoesOracle.analiticas?.map((x: any) => (
+                    <option value={x.IDANALITICA}>
+                      {x.IDANALITICA} - {x.DESCRICAO}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <div className="duplo">
               <label>
-                Situação
+                Pessoa
                 <input
                   placeholder="Todas"
                   type="number"
                   onChange={(e) =>
                     setF({
                       ...f,
-                      idSituacao: e.target.value
-                        ? Number(e.target.value)
-                        : null,
+                      idPessoa: e.target.value ? Number(e.target.value) : null,
                     })
                   }
                 />
@@ -639,18 +666,11 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     }
                   >
                     <option value="">Todos os estabelecimentos</option>
-                    {estabelecimentos
-                      .filter(
-                        (x) =>
-                          !f.grupoFilialId ||
-                          x.grupo_filial_id === f.grupoFilialId,
-                      )
-                      .map((x) => (
-                        <option value={x.estab_oracle}>
-                          {x.estab_oracle} -{" "}
-                          {x.nome_filial || "Estabelecimento"}
-                        </option>
-                      ))}
+                    {estabelecimentos.map((x) => (
+                      <option value={x.estab_oracle}>
+                        {x.estab_oracle} - {x.nome_filial || "Estabelecimento"}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -778,135 +798,135 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               )}
             </section>
             <section
-                className={`painel gradeFluxo ${visaoPrincipal !== "HORIZONTAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
-              >
-                <header>
-                  <div>
-                    <h2>Contas a pagar x contas a receber</h2>
-                    <p>Visão rápida para antecipar os dias que exigem caixa</p>
-                  </div>
-                  <button
-                    className="maximizar"
-                    onClick={() => setGradeMaximizada(!gradeMaximizada)}
-                  >
-                    <Expand /> {gradeMaximizada ? "Restaurar" : "Maximizar"}
-                  </button>
-                  {id && pode("gestao.fluxo_caixa.exportar_excel") && (
-                    <button className="maximizar" onClick={exportarExcel}>
-                      <Download /> Excel
-                    </button>
-                  )}
-                </header>
-                <div className="gradeRolagem">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>FLUXO / PERÍODO</th>
-                        {dias.map((d) => (
-                          <th>{dataBr(d.data_fluxo)}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <th>(+) CONTAS A RECEBER</th>
-                        {dias.map((d) => (
-                          <td className="positivo">
-                            {moeda(d.entradas_previstas)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(+) RECEBIMENTO REALIZADO</th>
-                        {dias.map((d) => (
-                          <td className="positivo">
-                            {moeda(d.entradas_realizadas)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(+) RECEITAS FINANCEIRAS / RENDIMENTOS</th>
-                        {dias.map((d) => (
-                          <td className="positivo">
-                            {moeda(d.receitas_financeiras)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) CONTAS A PAGAR</th>
-                        {dias.map((d) => (
-                          <td className="negativo">
-                            {moeda(d.saidas_previstas)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) PAGAMENTOS REALIZADOS</th>
-                        {dias.map((d) => (
-                          <td className="negativo">
-                            {moeda(d.saidas_realizadas)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) PAGAMENTOS FORNECEDORES</th>
-                        {dias.map((d) => (
-                          <td className="negativo">
-                            {moeda(d.pagamentos_fornecedores)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) PAGAMENTOS DESPESAS</th>
-                        {dias.map((d) => (
-                          <td className="negativo">
-                            {moeda(d.pagamentos_despesas)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) INVESTIMENTOS / COMPRA DE ATIVOS</th>
-                        {dias.map((d) => (
-                          <td className="negativo">{moeda(d.investimentos)}</td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(-) AMORTIZAÇÃO DE EMPRÉSTIMOS</th>
-                        {dias.map((d) => (
-                          <td className="negativo">
-                            {moeda(d.amortizacao_emprestimos)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(=) FLUXO LÍQUIDO</th>
-                        {dias.map((d) => (
-                          <td
-                            className={
-                              Number(d.movimento_liquido) < 0
-                                ? "risco"
-                                : "positivo"
-                            }
-                          >
-                            {moeda(d.movimento_liquido)}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th>(=) SALDO PROJETADO</th>
-                        {dias.map((d) => (
-                          <td
-                            className={
-                              Number(d.saldo_projetado) < 0 ? "risco" : ""
-                            }
-                          >
-                            {moeda(d.saldo_projetado)}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
+              className={`painel gradeFluxo ${visaoPrincipal !== "HORIZONTAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
+            >
+              <header>
+                <div>
+                  <h2>Contas a pagar x contas a receber</h2>
+                  <p>Visão rápida para antecipar os dias que exigem caixa</p>
                 </div>
+                <button
+                  className="maximizar"
+                  onClick={() => setGradeMaximizada(!gradeMaximizada)}
+                >
+                  <Expand /> {gradeMaximizada ? "Restaurar" : "Maximizar"}
+                </button>
+                {id && pode("gestao.fluxo_caixa.exportar_excel") && (
+                  <button className="maximizar" onClick={exportarExcel}>
+                    <Download /> Excel
+                  </button>
+                )}
+              </header>
+              <div className="gradeRolagem">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>FLUXO / PERÍODO</th>
+                      {dias.map((d) => (
+                        <th>{dataBr(d.data_fluxo)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th>(+) CONTAS A RECEBER</th>
+                      {dias.map((d) => (
+                        <td className="positivo">
+                          {moeda(d.entradas_previstas)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(+) RECEBIMENTO REALIZADO</th>
+                      {dias.map((d) => (
+                        <td className="positivo">
+                          {moeda(d.entradas_realizadas)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(+) RECEITAS FINANCEIRAS / RENDIMENTOS</th>
+                      {dias.map((d) => (
+                        <td className="positivo">
+                          {moeda(d.receitas_financeiras)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) CONTAS A PAGAR</th>
+                      {dias.map((d) => (
+                        <td className="negativo">
+                          {moeda(d.saidas_previstas)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) PAGAMENTOS REALIZADOS</th>
+                      {dias.map((d) => (
+                        <td className="negativo">
+                          {moeda(d.saidas_realizadas)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) PAGAMENTOS FORNECEDORES</th>
+                      {dias.map((d) => (
+                        <td className="negativo">
+                          {moeda(d.pagamentos_fornecedores)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) PAGAMENTOS DESPESAS</th>
+                      {dias.map((d) => (
+                        <td className="negativo">
+                          {moeda(d.pagamentos_despesas)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) INVESTIMENTOS / COMPRA DE ATIVOS</th>
+                      {dias.map((d) => (
+                        <td className="negativo">{moeda(d.investimentos)}</td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(-) AMORTIZAÇÃO DE EMPRÉSTIMOS</th>
+                      {dias.map((d) => (
+                        <td className="negativo">
+                          {moeda(d.amortizacao_emprestimos)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(=) FLUXO LÍQUIDO</th>
+                      {dias.map((d) => (
+                        <td
+                          className={
+                            Number(d.movimento_liquido) < 0
+                              ? "risco"
+                              : "positivo"
+                          }
+                        >
+                          {moeda(d.movimento_liquido)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th>(=) SALDO PROJETADO</th>
+                      {dias.map((d) => (
+                        <td
+                          className={
+                            Number(d.saldo_projetado) < 0 ? "risco" : ""
+                          }
+                        >
+                          {moeda(d.saldo_projetado)}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
             <section
               className={`painel gradeFluxo fluxoVertical ${visaoPrincipal !== "VERTICAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}

@@ -7,6 +7,7 @@ import { consultar, consultarUm } from "./banco/conexao.js";
 import { executarOracle } from "./banco/oracle.js";
 import { autenticar, exigir } from "./seguranca/sessao.js";
 import {
+  carregarFiltrosOracle,
   garantirFontes,
   processarFluxo,
 } from "./modulos/gestao/servicoFluxoCaixa.js";
@@ -270,6 +271,26 @@ export async function criarApp() {
         );
       } catch (e: any) {
         return res.code(422).send(falha("ORACLE_INDISPONIVEL", e.message));
+      }
+    },
+  );
+  app.get(
+    "/gestao/fluxo-caixa/filtros-opcoes",
+    { preHandler: exigir("gestao.fluxo_caixa.visualizar") },
+    async (req, res) => {
+      try {
+        await garantirFontes(req.user.id);
+        return (
+          (await carregarFiltrosOracle()) ?? {
+            grupos: [],
+            filiais: [],
+            portadores: [],
+            situacoes: [],
+            analiticas: [],
+          }
+        );
+      } catch (e: any) {
+        return res.code(422).send({ mensagem: e.message });
       }
     },
   );

@@ -4,8 +4,10 @@ O projeto replica a stack e os padrões essenciais do Control S Hub (Fastify, Re
 
 ## Fontes Oracle validadas
 
+- Grupos e estabelecimentos: `GRUPOESTAB → GRUPOESTABFILIAL → FILIAL`. O objeto `GRUPOFILIAL` existe no esquema MCP, mas não possui colunas no dicionário fornecido; por isso não é usado como fonte operacional.
 - Saldo: `PORTADOR` e `PORTADORSALDO`. Financeiro usa `ENTRADAS - SAIDAS`; conciliado usa `ENTCONCILIADA - SAICONCILIADA`.
 - Títulos previstos: `DUPREC`, `DUPPAG` e funções nativas `BAIXASDUPREC` / `BAIXASDUPPAG`.
+- Pagamentos realizados: `DUPPAG → DUPPAGACERFIN`, pela data efetiva `DTPGTO`.
 - Dinheiro realizado: `NOTA → NOTAACERFIN → ACERDIN → LANFIN`.
 - Cartão de débito realizado: `NOTA → NOTAACERFIN → ACERCAR → CARTAO`.
 - PIX realizado: `NOTA → NOTAACERFIN → ACERCARTDIG → CARTDIG → LANFIN`, limitado a `TRANSACAOPIXOK = 'S'`.
@@ -18,7 +20,7 @@ O serviço lê três meses completos anteriores ao início do período, agrupa r
 
 ## Segurança e rastreabilidade
 
-As rotas exigem JWT e ação específica. Testes de fonte aceitam apenas `SELECT`/`WITH`, usam binds e limitam o retorno. Cada teste gera log; cada edição preserva versão anterior; publicação registra usuário e data.
+As rotas exigem JWT e ação específica. O executor aceita comandos Oracle completos, usa binds e mantém `autoCommit` desativado. Consultas retornadas pela interface são limitadas. Cada teste gera log; cada edição preserva versão anterior; publicação registra usuário e data.
 
 ## Pendências conscientes
 
