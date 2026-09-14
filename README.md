@@ -9,8 +9,10 @@ Primeiro módulo independente do ecossistema Control S: **Fluxo de Caixa Premium
 3. Rode `npm install` e `npm run build`.
 4. Desenvolvimento: `npm run dev:backend` e `npm run dev:frontend`.
 
-## Serviço do Windows
+## Instalação ou atualização no Windows
 
-Com o NSSM em `C:\nssm\win64\nssm.exe`, execute **como administrador** `INSTALAR_SERVICO_WINDOWS.cmd`. Serão instalados os serviços automáticos `ControlSGestaoBackend` e `ControlSGestaoFrontend`, seguindo o padrão operacional do Control S Hub. A aplicação ficará disponível em `http://localhost:5175`.
+Extraia o pacote final e execute somente `ATUALIZAR.cmd`. O atualizador solicita elevação, instala Node.js e PostgreSQL quando necessário, restaura os dados iniciais em uma instalação nova, aplica todas as migrações, instala as dependências, compila e configura os serviços automáticos `ControlSGestaoBackend` e `ControlSGestaoFrontend`. Ao terminar, abre `http://localhost:5175`.
+
+Em atualizações, o banco e o arquivo `.env` existentes são preservados. Para gerar um novo pacote completo com os dados e configurações da máquina atual, execute `scripts\windows\gerar-pacote-atualizador.ps1`.
 
 O Oracle é acessado em modo somente leitura, com pool e binds. As fontes SQL ficam versionadas no PostgreSQL e só podem ser vistas, testadas, editadas e publicadas com as permissões correspondentes.

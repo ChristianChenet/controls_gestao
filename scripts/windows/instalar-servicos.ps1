@@ -1,3 +1,4 @@
+param([switch]$SkipBuild)
 $ErrorActionPreference = "Stop"
 $ProjectDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $Nssm = "C:\nssm\win64\nssm.exe"
@@ -12,8 +13,10 @@ if (-not (Test-Path -LiteralPath $Node)) { throw "Node.js não encontrado em $No
 New-Item -ItemType Directory -Force -Path $Logs | Out-Null
 Push-Location $ProjectDirectory
 try {
-  & $Npm install
-  & $Npm run build
+  if (-not $SkipBuild) {
+    & $Npm install
+    & $Npm run build
+  }
   foreach ($ServiceName in @("ControlSGestaoFrontend", "ControlSGestaoBackend")) {
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
       & $Nssm stop $ServiceName confirm

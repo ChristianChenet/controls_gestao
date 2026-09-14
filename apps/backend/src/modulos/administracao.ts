@@ -202,7 +202,12 @@ export const listarConexoesOracle = () =>
   );
 export async function salvarConexaoOracle(b: any) {
   await reiniciarPoolOracle();
-  if (b.id)
+  if (b.ativa !== false)
+    await consultar(
+      "UPDATE gestao_conexao_oracle SET ativa=FALSE WHERE id<>COALESCE($1,0) AND ativa=TRUE",
+      [b.id ?? 0],
+    );
+  if (b.id) {
     return consultarUm(
       `UPDATE gestao_conexao_oracle SET nome=$2,host=$3,porta=$4,servico=$5,usuario=$6,senha_criptografada=CASE WHEN NULLIF($7,'') IS NULL THEN senha_criptografada ELSE PGP_SYM_ENCRYPT($7,$8) END,ativa=$9,atualizado_em=NOW() WHERE id=$1 RETURNING id,nome,host,porta,servico,usuario,ativa`,
       [
@@ -217,6 +222,7 @@ export async function salvarConexaoOracle(b: any) {
         b.ativa !== false,
       ],
     );
+  }
   return consultarUm(
     `INSERT INTO gestao_conexao_oracle(nome,host,porta,servico,usuario,senha_criptografada,ativa) VALUES($1,$2,$3,$4,$5,PGP_SYM_ENCRYPT($6,$7),$8) RETURNING id,nome,host,porta,servico,usuario,ativa`,
     [
