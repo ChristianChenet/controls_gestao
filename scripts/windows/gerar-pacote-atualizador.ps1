@@ -10,7 +10,7 @@ if (-not $Destino.StartsWith([IO.Path]::GetFullPath($ReleaseRoot), [StringCompar
 }
 New-Item -ItemType Directory -Force -Path $Destino | Out-Null
 
-$Exclude = @(".git", ".env", "node_modules", "release", "logs")
+$Exclude = @(".git", ".env", "release", "logs")
 Get-ChildItem -LiteralPath $ProjectDirectory -Force | Where-Object { $Exclude -notcontains $_.Name } | ForEach-Object {
   Copy-Item -LiteralPath $_.FullName -Destination $Destino -Recurse -Force
 }
@@ -30,5 +30,12 @@ try {
 } finally { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
 
 $Zip = "$Destino.zip"
-Compress-Archive -Path (Join-Path $Destino "*") -DestinationPath $Zip -Force
+if (Test-Path -LiteralPath $Zip) { [IO.File]::Delete($Zip) }
+$Tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+if ($Tar) {
+  & $Tar.Source -a -cf $Zip -C $Destino "."
+  if ($LASTEXITCODE -ne 0) { throw "Falha ao compactar o pacote final." }
+} else {
+  Compress-Archive -Path (Join-Path $Destino "*") -DestinationPath $Zip -Force
+}
 Write-Host "Pacote pronto: $Zip"

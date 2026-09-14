@@ -3,4 +3,6 @@ dist/
 .env
 *.log
 tools/nssm/
+tools/installers/
+tools/postgresql-portable/
 release/
