@@ -930,35 +930,55 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 {acoesDaVisao()}
               </header>
               {dias.length ? (
-                <div className="calendario">
-                  {dias.map((d) => (
-                    <button
-                      onClick={() => setDia(d)}
-                      className={
-                        Number(d.saldo_projetado) < 0 ? "negativo" : ""
-                      }
-                    >
-                      <span>{dataBr(d.data_fluxo)}</span>
-                      <small>
-                        {new Date(
-                          `${d.data_fluxo.slice(0, 10)}T12:00`,
-                        ).toLocaleDateString("pt-BR", { weekday: "short" })}
-                      </small>
-                      <strong>{moeda(d.saldo_projetado)}</strong>
-                      <em>
-                        <i className="entrada" />+ {moeda(d.entradas_previstas)}
-                      </em>
-                      <em>
-                        <i className="saida" />− {moeda(d.saidas_previstas)}
-                      </em>
-                      {Number(d.previsao_inteligente) > 0 && (
-                        <b>
-                          <Lightbulb /> {moeda(d.previsao_inteligente)}
-                        </b>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="saldoAberturaCalendario">
+                    <span>Saldo inicial antes do primeiro dia</span>
+                    <strong>{moeda(dias[0].disponivel_inicial)}</strong>
+                    <small>
+                      Base para iniciar a projeção em{" "}
+                      {new Date(
+                        dias[0].data_fluxo.slice(0, 10) + "T12:00",
+                      ).toLocaleDateString("pt-BR")}
+                    </small>
+                  </div>
+                  <div className="calendario">
+                    {dias.map((d) => (
+                      <button
+                        onClick={() => setDia(d)}
+                        className={
+                          Number(d.saldo_projetado) < 0 ? "negativo" : ""
+                        }
+                      >
+                        <span>{dataBr(d.data_fluxo)}</span>
+                        <small>
+                          {new Date(
+                            `${d.data_fluxo.slice(0, 10)}T12:00`,
+                          ).toLocaleDateString("pt-BR", { weekday: "short" })}
+                        </small>
+                        <em className="saldoAnterior">
+                          Saldo inicial <b>{moeda(d.disponivel_inicial)}</b>
+                        </em>
+                        <em>
+                          <i className="entrada" /> Entradas +{" "}
+                          {moeda(d.entradas_previstas)}
+                        </em>
+                        <em>
+                          <i className="saida" /> Saídas −{" "}
+                          {moeda(d.saidas_previstas)}
+                        </em>
+                        <strong className="saldoFinalDia">
+                          Saldo final {moeda(d.saldo_projetado)}
+                        </strong>
+                        {Number(d.previsao_inteligente) > 0 && (
+                          <b className="previsaoDia">
+                            <Lightbulb /> Previsão incluída{" "}
+                            {moeda(d.previsao_inteligente)}
+                          </b>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
               ) : (
                 <div className="vazio">
                   <CalendarDays />
