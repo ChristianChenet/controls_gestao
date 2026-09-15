@@ -183,8 +183,13 @@ try {
     $LoginBody = @{ email = "christian@controlsconsultoria.com.br"; senha = "Christian2024@" } | ConvertTo-Json
     $LoginTest = Invoke-RestMethod -Uri "http://127.0.0.1:5175/api/auth/login" -Method Post -ContentType "application/json" -Body $LoginBody -TimeoutSec 10
     if (-not $LoginTest.sucesso -or -not $LoginTest.dados.token) { throw "Resposta de login invalida." }
+    $ValidationHeaders = @{ Authorization = "Bearer $($LoginTest.dados.token)" }
+    $FlowValidation = Invoke-RestMethod -Uri "http://127.0.0.1:5175/api/admin/validar-fluxo-oracle" -Method Post -Headers $ValidationHeaders -ContentType "application/json" -Body "{}" -TimeoutSec 300
+    if (-not $FlowValidation.sucesso -or -not $FlowValidation.dados.sucesso) {
+      throw "A validacao automatica das fontes Oracle nao foi concluida."
+    }
   } catch {
-    throw "A validacao automatica do login falhou. Consulte logs\backend-error.log. Detalhe: $($_.Exception.Message)"
+    throw "A validacao automatica final falhou. Consulte logs\backend-error.log. Detalhe: $($_.Exception.Message)"
   }
   Start-Process "http://localhost:5175"
   Write-Host "Concluído. Acesse http://localhost:5175"

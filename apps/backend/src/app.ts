@@ -10,6 +10,7 @@ import {
   carregarFiltrosOracle,
   garantirFontes,
   processarFluxo,
+  validarFontesFluxoOracle,
 } from "./modulos/gestao/servicoFluxoCaixa.js";
 import {
   alterarSenhaUsuario,
@@ -63,11 +64,12 @@ export async function criarApp() {
       empresas = empresaPadrao ? [empresaPadrao] : [];
     }
     const empresa = empresas.find((x: any) => x.padrao) ?? empresas[0];
-    const permissoes = usuario.administrador || usuario.superadmin
-      ? ["*"]
-      : empresa
-        ? await permissoesUsuario(usuario.id, empresa.id)
-        : [];
+    const permissoes =
+      usuario.administrador || usuario.superadmin
+        ? ["*"]
+        : empresa
+          ? await permissoesUsuario(usuario.id, empresa.id)
+          : [];
     return { usuario, empresas, empresa, permissoes };
   }
   app.post("/api/auth/login", async (req, res) => {
@@ -100,10 +102,19 @@ export async function criarApp() {
       });
     } catch (e: any) {
       app.log.error(e, "Falha durante o login");
-      const ambiguo = e?.message === "Mais de um usuário encontrado. Informe o e-mail completo.";
+      const ambiguo =
+        e?.message ===
+        "Mais de um usuário encontrado. Informe o e-mail completo.";
       return res
         .code(ambiguo ? 409 : 500)
-        .send(falha(ambiguo ? "LOGIN_AMBIGUO" : "ERRO_LOGIN", ambiguo ? e.message : "Não foi possível concluir o login. Consulte o log do serviço."));
+        .send(
+          falha(
+            ambiguo ? "LOGIN_AMBIGUO" : "ERRO_LOGIN",
+            ambiguo
+              ? e.message
+              : "Não foi possível concluir o login. Consulte o log do serviço.",
+          ),
+        );
     }
   });
   app.post("/api/auth/validar-credenciais", async (req, res) => {
@@ -304,6 +315,19 @@ export async function criarApp() {
       } catch (e: any) {
         return res.code(422).send({ mensagem: e.message });
       }
+    },
+  );
+  app.post(
+    "/api/admin/validar-fluxo-oracle",
+    { preHandler: admin },
+    async (req, res) => {
+      await garantirFontes(req.user.id);
+      const validacao = await validarFontesFluxoOracle();
+      return validacao.sucesso
+        ? sucesso(validacao)
+        : res
+            .code(422)
+            .send(falha("FONTES_ORACLE_INVALIDAS", JSON.stringify(validacao)));
     },
   );
   app.get(

@@ -1118,7 +1118,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
 function Fontes() {
   const [fontes, setFontes] = useState<any[]>([]),
     [selecionada, setSelecionada] = useState<any>(),
-    [retorno, setRetorno] = useState("");
+    [retorno, setRetorno] = useState(""),
+    [testando, setTestando] = useState(false),
+    [resultadoTeste, setResultadoTeste] = useState<any>();
   useEffect(() => {
     api<any[]>("/gestao/fontes-dados").then(setFontes);
   }, []);
@@ -1139,6 +1141,7 @@ function Fontes() {
     setRetorno("Nova versão salva com sucesso.");
   }
   async function testarFonte() {
+    setTestando(true);
     try {
       const r = await api<any>(
         `/gestao/fontes-dados/${selecionada.id}/testar`,
@@ -1152,8 +1155,11 @@ function Fontes() {
       setRetorno(
         `Teste concluído: ${r.quantidadeLinhas} linha(s) em ${r.tempoMs} ms.`,
       );
+      setResultadoTeste({ ...r, nome: selecionada.nome });
     } catch (e: any) {
       setRetorno(e.message);
+    } finally {
+      setTestando(false);
     }
   }
   async function publicarFonte() {
@@ -1218,13 +1224,94 @@ function Fontes() {
               SQL e blocos Oracle parametrizados · acesso controlado por perfil
             </span>
             <div className="editorAcoes">
-              <button onClick={testarFonte}>Testar SQL</button>
+              <button onClick={testarFonte} disabled={testando}>
+                {testando ? "Executando..." : "Testar SQL"}
+              </button>
               <button onClick={salvarFonte}>Salvar versão</button>
               <button onClick={publicarFonte}>Publicar</button>
             </div>
           </footer>
         </section>
       )}
+      {resultadoTeste &&
+        (() => {
+          const colunas = Array.from(
+            new Set<string>(
+              (resultadoTeste.linhas ?? []).flatMap((linha: any) =>
+                Object.keys(linha),
+              ),
+            ),
+          );
+          return (
+            <div
+              className="modalResultadoFonte"
+              role="dialog"
+              aria-modal="true"
+            >
+              <section>
+                <header>
+                  <div>
+                    <span>Resultado do teste</span>
+                    <h2>{resultadoTeste.nome}</h2>
+                    <p>
+                      {resultadoTeste.quantidadeLinhas} linha(s) retornada(s) em{" "}
+                      {resultadoTeste.tempoMs} ms
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setResultadoTeste(null)}
+                    aria-label="Fechar resultado"
+                  >
+                    <X />
+                  </button>
+                </header>
+                <div className="tabelaResultadoFonte">
+                  {colunas.length ? (
+                    <table>
+                      <thead>
+                        <tr>
+                          {colunas.map((coluna) => (
+                            <th key={coluna}>{coluna}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(resultadoTeste.linhas ?? []).map(
+                          (linha: any, indice: number) => (
+                            <tr key={indice}>
+                              {colunas.map((coluna) => {
+                                const valor = linha[coluna];
+                                return (
+                                  <td key={coluna}>
+                                    {valor == null
+                                      ? ""
+                                      : typeof valor === "object"
+                                        ? JSON.stringify(valor)
+                                        : String(valor)}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="resultadoFonteVazio">
+                      A consulta foi executada, mas não retornou linhas.
+                    </div>
+                  )}
+                </div>
+                <footer>
+                  <span>Exibição limitada a 200 linhas por teste.</span>
+                  <button onClick={() => setResultadoTeste(null)}>
+                    Fechar
+                  </button>
+                </footer>
+              </section>
+            </div>
+          );
+        })()}
     </main>
   );
 }

@@ -24,6 +24,19 @@ const fonte = (nome: string) =>
     "SELECT * FROM gestao_fonte_dados WHERE nome=$1 AND ativo=TRUE",
     [nome],
   );
+async function executarFonteOracle<T = Record<string, unknown>>(
+  configuracao: any,
+  parametros: Record<string, unknown>,
+  maxRows = 50000,
+) {
+  if (!configuracao)
+    throw new Error("Fonte de dados necessária não encontrada ou inativa.");
+  try {
+    return await executarOracle<T>(configuracao.sql_texto, parametros, maxRows);
+  } catch (erro: any) {
+    throw new Error(`${configuracao.nome}: ${erro.message}`);
+  }
+}
 const numero = (v: unknown) => Number(v ?? 0);
 const iso = (v: unknown) => new Date(String(v)).toISOString().slice(0, 10);
 
@@ -86,29 +99,74 @@ export async function garantirFontes(usuarioId: number) {
     );
 }
 
+export async function validarFontesFluxoOracle() {
+  const fontes = await consultar<any>(
+    "SELECT nome,sql_texto,parametros_json FROM gestao_fonte_dados WHERE ativo=TRUE AND nome LIKE 'oracle_fluxo_%' ORDER BY nome",
+  );
+  const resultados: any[] = [];
+  for (const configuracao of fontes) {
+    const inicio = Date.now();
+    try {
+      const linhas = await executarFonteOracle<any>(
+        configuracao,
+        configuracao.parametros_json ?? {},
+        5,
+      );
+      resultados.push({
+        fonte: configuracao.nome,
+        sucesso: true,
+        quantidadeLinhas: linhas.length,
+        tempoMs: Date.now() - inicio,
+      });
+    } catch (erro: any) {
+      resultados.push({
+        fonte: configuracao.nome,
+        sucesso: false,
+        mensagem: erro.message,
+        tempoMs: Date.now() - inicio,
+      });
+    }
+  }
+  return {
+    sucesso:
+      resultados.length === FONTES_INICIAIS.length &&
+      resultados.every((x) => x.sucesso),
+    quantidadeFontes: resultados.length,
+    resultados,
+  };
+}
+
 export async function carregarFiltrosOracle() {
   if (!(await oracleConfigurado())) return null;
-  const [
-    gruposFonte,
-    filiaisFonte,
-    portadoresFonte,
-    situacoesFonte,
-    analiticasFonte,
-  ] = await Promise.all([
-    fonte("oracle_fluxo_listar_grupos_filiais"),
-    fonte("oracle_fluxo_listar_filiais"),
-    fonte("oracle_fluxo_listar_portadores"),
-    fonte("oracle_fluxo_listar_situacoes"),
-    fonte("oracle_fluxo_listar_analiticas"),
-  ]);
-  const [linhasGrupo, filiais, portadores, situacoes, analiticas] =
-    await Promise.all([
-      executarOracle<any>(gruposFonte.sql_texto, {}),
-      executarOracle<any>(filiaisFonte.sql_texto, {}),
-      executarOracle<any>(portadoresFonte.sql_texto, {}),
-      executarOracle<any>(situacoesFonte.sql_texto, {}),
-      executarOracle<any>(analiticasFonte.sql_texto, {}),
-    ]);
+  const nomes = [
+    "oracle_fluxo_listar_grupos_filiais",
+    "oracle_fluxo_listar_filiais",
+    "oracle_fluxo_listar_portadores",
+    "oracle_fluxo_listar_situacoes",
+    "oracle_fluxo_listar_analiticas",
+  ] as const;
+  const resultados = await Promise.all(
+    nomes.map(async (nome) => {
+      try {
+        const configuracao = await fonte(nome);
+        if (!configuracao) throw new Error("fonte inexistente ou inativa");
+        return {
+          nome,
+          linhas: await executarFonteOracle<any>(configuracao, {}),
+        };
+      } catch (erro: any) {
+        return { nome, linhas: [] as any[], erro: erro.message as string };
+      }
+    }),
+  );
+  const porNome = Object.fromEntries(
+    resultados.map((item) => [item.nome, item]),
+  );
+  const linhasGrupo = porNome.oracle_fluxo_listar_grupos_filiais.linhas;
+  const filiais = porNome.oracle_fluxo_listar_filiais.linhas;
+  const portadores = porNome.oracle_fluxo_listar_portadores.linhas;
+  const situacoes = porNome.oracle_fluxo_listar_situacoes.linhas;
+  const analiticas = porNome.oracle_fluxo_listar_analiticas.linhas;
   const grupos = Array.from(
     linhasGrupo
       .reduce((map: Map<number, any>, linha: any) => {
@@ -127,7 +185,16 @@ export async function carregarFiltrosOracle() {
       }, new Map<number, any>())
       .values(),
   );
-  return { grupos, filiais, portadores, situacoes, analiticas };
+  return {
+    grupos,
+    filiais,
+    portadores,
+    situacoes,
+    analiticas,
+    erros: resultados
+      .filter((item) => item.erro)
+      .map((item) => ({ fonte: item.nome, mensagem: item.erro })),
+  };
 }
 function previsao(detalhes: any[], ini: string, fim: string, formas: string[]) {
   const medias = new Map<string, number[]>();
@@ -161,7 +228,7 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
       usuarioId,
       f.estab ? "LOJA" : f.grupoFilialId ? "GRUPO_FILIAL" : "CONSOLIDADO",
       f.estab ?? null,
-      null,
+      f.grupoFilialId ?? null,
       f.dataInicial,
       f.dataFinal,
       f.tipoSaldo === "CONCILIADO",
@@ -183,8 +250,8 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
       pagamentosFonte = await fonte("oracle_fluxo_pagamentos_realizados"),
       prevFonte = await fonte("oracle_fluxo_previsao_recebimentos_historico");
     const binds: any = {
-      P_DTINI: new Date(f.dataInicial),
-      P_DTFIM: new Date(f.dataFinal),
+      P_DTINI: f.dataInicial,
+      P_DTFIM: f.dataFinal,
       P_ESTAB: f.estab ?? null,
       P_IDPORTADOR: f.idPortador ?? null,
       P_IDPESS: f.idPessoa ?? null,
@@ -195,8 +262,8 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
     };
     const itensGrupo = f.grupoFilialId
       ? (
-          await executarOracle<any>(
-            (await fonte("oracle_fluxo_listar_grupos_filiais")).sql_texto,
+          await executarFonteOracle<any>(
+            await fonte("oracle_fluxo_listar_grupos_filiais"),
             {},
           )
         ).filter((x) => numero(x.IDGRUPOFILIAL) === numero(f.grupoFilialId))
@@ -213,21 +280,19 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
       historico: any[] = [];
     for (const estab of escopos) {
       const parametros = { ...binds, P_ESTAB: estab };
-      saldos.push(
-        ...(await executarOracle<any>(saldoFonte.sql_texto, parametros)),
-      );
+      saldos.push(...(await executarFonteOracle<any>(saldoFonte, parametros)));
       movimentos.push(
-        ...(await executarOracle<any>(movFonte.sql_texto, parametros)),
+        ...(await executarFonteOracle<any>(movFonte, parametros)),
       );
       realizados.push(
-        ...(await executarOracle<any>(realizadoFonte.sql_texto, parametros)),
+        ...(await executarFonteOracle<any>(realizadoFonte, parametros)),
       );
       pagamentos.push(
-        ...(await executarOracle<any>(pagamentosFonte.sql_texto, parametros)),
+        ...(await executarFonteOracle<any>(pagamentosFonte, parametros)),
       );
       if (f.usaPrevisaoInteligente !== false)
         historico.push(
-          ...(await executarOracle<any>(prevFonte.sql_texto, parametros)),
+          ...(await executarFonteOracle<any>(prevFonte, parametros)),
         );
     }
     const proj = previsao(

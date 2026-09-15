@@ -75,20 +75,55 @@ export async function testarOracleConfiguracao(id: number) {
     await conexao.close();
   }
 }
+export function prepararBindsOracle(
+  sql: string,
+  parametros: Record<string, unknown> = {},
+) {
+  if (!sql.trim()) throw new Error("Informe o comando Oracle a executar.");
+  const sqlSemComentariosELiterais = sql
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--.*$/gm, " ")
+    .replace(/'(?:''|[^'])*'/g, "''");
+  const nomesBinds = Array.from(
+    new Set(
+      Array.from(
+        sqlSemComentariosELiterais.matchAll(/:([A-Z_][A-Z0-9_$#]*|\d+)/gi),
+      ).map((resultado) => resultado[1].toUpperCase()),
+    ),
+  );
+  const parametrosNormalizados = Object.fromEntries(
+    Object.entries(parametros).map(([chave, valor]) => [
+      chave.toUpperCase(),
+      valor,
+    ]),
+  );
+  const ausentes = nomesBinds.filter(
+    (nome) =>
+      !Object.prototype.hasOwnProperty.call(parametrosNormalizados, nome),
+  );
+  if (ausentes.length)
+    throw new Error(
+      `Parâmetros Oracle não informados: ${ausentes.join(", ")}.`,
+    );
+  return Object.fromEntries(
+    nomesBinds.map((chave) => {
+      const valor = parametrosNormalizados[chave];
+      return [
+        chave,
+        /^P_DT/.test(chave) && typeof valor === "string"
+          ? new Date(`${valor.slice(0, 10)}T12:00:00`)
+          : valor,
+      ];
+    }),
+  );
+}
 export async function executarOracle<T = Record<string, unknown>>(
   sql: string,
   parametros: Record<string, unknown> = {},
   maxRows = 50000,
 ) {
   if (!sql.trim()) throw new Error("Informe o comando Oracle a executar.");
-  const binds = Object.fromEntries(
-    Object.entries(parametros).map(([chave, valor]) => [
-      chave,
-      /^P_DT/.test(chave) && typeof valor === "string"
-        ? new Date(`${valor.slice(0, 10)}T12:00:00`)
-        : valor,
-    ]),
-  );
+  const binds = prepararBindsOracle(sql, parametros);
   const conexao = await (await obterPool()).getConnection();
   try {
     const resultado = await conexao.execute(sql, binds, {
