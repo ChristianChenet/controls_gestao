@@ -4,6 +4,7 @@ $LogDirectory = Join-Path $ProjectDirectory "logs"
 $LogFile = Join-Path $LogDirectory "atualizador.log"
 $DatabaseName = "control_s_gestao"
 $DatabasePassword = "controls"
+$DatabasePort = 5436
 $PortablePostgresRuntime = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\runtime"
 $NodeInstallerHash = "F0F66C2A80C08A30A5AB5179EE9EA9E45F9B46289436A8CC87FF833B852DB351"
 $RuntimeInstallerHash = "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
@@ -11,12 +12,10 @@ New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 Start-Transcript -Path $LogFile -Append | Out-Null
 
 function Find-PostgresTool([string]$Tool) {
-  foreach ($root in @("C:\Program Files\PostgreSQL", $PortablePostgresRuntime)) {
-    $found = Get-ChildItem -LiteralPath $root -Filter "$Tool.exe" -Recurse -File -ErrorAction SilentlyContinue |
-      Sort-Object FullName -Descending |
-      Select-Object -First 1
-    if ($found) { return $found.FullName }
-  }
+  $found = Get-ChildItem -LiteralPath $PortablePostgresRuntime -Filter "$Tool.exe" -Recurse -File -ErrorAction SilentlyContinue |
+    Sort-Object FullName -Descending |
+    Select-Object -First 1
+  if ($found) { return $found.FullName }
   throw "$Tool não foi localizado após a instalação do PostgreSQL."
 }
 
@@ -35,72 +34,79 @@ try {
   }
 
   Write-Host "[2/7] Verificando PostgreSQL..."
-  $Psql = Get-ChildItem -Path @("C:\Program Files\PostgreSQL", $PortablePostgresRuntime) -Filter "psql.exe" -Recurse -File -ErrorAction SilentlyContinue |
-    Sort-Object FullName -Descending |
-    Select-Object -First 1
-  if (-not $Psql) {
-    $PortablePostgresSource = Join-Path $ProjectDirectory "tools\postgresql-portable"
-    if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgresSource "bin\initdb.exe"))) {
-      throw "PostgreSQL não está instalado e o pacote portátil não foi encontrado."
-    }
-    New-Item -ItemType Directory -Force -Path $PortablePostgresRuntime | Out-Null
-    Copy-Item -Path (Join-Path $PortablePostgresSource "*") -Destination $PortablePostgresRuntime -Recurse -Force
-    $PortablePostgres = $PortablePostgresRuntime
-    $PostgresExecutable = Join-Path $PortablePostgres "bin\postgres.exe"
-    $PostgresRuntimeOk = $false
-    try {
-      & $PostgresExecutable --version | Out-Null
-      $PostgresRuntimeOk = $LASTEXITCODE -eq 0
-    } catch { $PostgresRuntimeOk = $false }
-    if (-not $PostgresRuntimeOk) {
-      $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
-      if (-not (Test-Path -LiteralPath $RuntimeInstaller)) { throw "Componentes necessarios do Windows nao foram encontrados." }
-      if ((Get-FileHash -LiteralPath $RuntimeInstaller -Algorithm SHA256).Hash -ne $RuntimeInstallerHash) {
-        throw "O instalador dos componentes do Windows esta corrompido."
-      }
-      $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
-      if ($RuntimeInstall.ExitCode -notin @(0, 1638, 1641, 3010)) {
-        throw "Falha ao instalar os componentes do Windows (codigo $($RuntimeInstall.ExitCode))."
-      }
-    }
-    $PostgresData = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\data"
-    New-Item -ItemType Directory -Force -Path $PostgresData | Out-Null
-    if (-not (Test-Path -LiteralPath (Join-Path $PostgresData "PG_VERSION"))) {
-      $PasswordFile = Join-Path $env:TEMP "control-s-gestao-pg-password.txt"
-      [IO.File]::WriteAllText($PasswordFile, $DatabasePassword, (New-Object System.Text.UTF8Encoding($false)))
-      try {
-        & (Join-Path $PortablePostgres "bin\initdb.exe") -D $PostgresData -U postgres --encoding=UTF8 --locale=C --auth=scram-sha-256 --pwfile=$PasswordFile
-        if ($LASTEXITCODE -ne 0) { throw "Falha ao inicializar o PostgreSQL portátil." }
-      } finally { Remove-Item -LiteralPath $PasswordFile -Force -ErrorAction SilentlyContinue }
-    }
-    if (-not (Get-Service -Name ControlSGestaoPostgreSQL -ErrorAction SilentlyContinue)) {
-      & (Join-Path $PortablePostgres "bin\pg_ctl.exe") register -N ControlSGestaoPostgreSQL -D $PostgresData -S auto -o '"-p 5432"'
-      if ($LASTEXITCODE -ne 0) { throw "Falha ao registrar o serviço PostgreSQL." }
-    }
-    Start-Service ControlSGestaoPostgreSQL
-    $ready = Join-Path $PortablePostgres "bin\pg_isready.exe"
-    $PostgresReady = $false
-    for ($attempt = 0; $attempt -lt 30; $attempt++) {
-      & $ready -h localhost -p 5432 | Out-Null
-      if ($LASTEXITCODE -eq 0) { $PostgresReady = $true; break }
-      Start-Sleep -Seconds 1
-    }
-    if (-not $PostgresReady) { throw "O servico PostgreSQL nao respondeu na porta 5432." }
+  $PortablePostgresSource = Join-Path $ProjectDirectory "tools\postgresql-portable"
+  if (-not (Test-Path -LiteralPath (Join-Path $PortablePostgresSource "bin\initdb.exe"))) {
+    throw "O PostgreSQL portatil nao foi encontrado no pacote."
   }
+  New-Item -ItemType Directory -Force -Path $PortablePostgresRuntime | Out-Null
+  Copy-Item -Path (Join-Path $PortablePostgresSource "*") -Destination $PortablePostgresRuntime -Recurse -Force
+  $PortablePostgres = $PortablePostgresRuntime
+  $PostgresExecutable = Join-Path $PortablePostgres "bin\postgres.exe"
+  $PostgresRuntimeOk = $false
+  try {
+    & $PostgresExecutable --version | Out-Null
+    $PostgresRuntimeOk = $LASTEXITCODE -eq 0
+  } catch { $PostgresRuntimeOk = $false }
+  if (-not $PostgresRuntimeOk) {
+    $RuntimeInstaller = Join-Path $ProjectDirectory "tools\installers\vc_redist.x64.exe"
+    if (-not (Test-Path -LiteralPath $RuntimeInstaller)) { throw "Componentes necessarios do Windows nao foram encontrados." }
+    if ((Get-FileHash -LiteralPath $RuntimeInstaller -Algorithm SHA256).Hash -ne $RuntimeInstallerHash) {
+      throw "O instalador dos componentes do Windows esta corrompido."
+    }
+    $RuntimeInstall = Start-Process $RuntimeInstaller -Wait -PassThru -ArgumentList "/install", "/quiet", "/norestart"
+    if ($RuntimeInstall.ExitCode -notin @(0, 1638, 1641, 3010)) {
+      throw "Falha ao instalar os componentes do Windows (codigo $($RuntimeInstall.ExitCode))."
+    }
+    & $PostgresExecutable --version | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "O PostgreSQL nao e compativel com este Windows Server." }
+  }
+  $PostgresData = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\data"
+  New-Item -ItemType Directory -Force -Path $PostgresData | Out-Null
+  if (-not (Test-Path -LiteralPath (Join-Path $PostgresData "PG_VERSION"))) {
+    $PasswordFile = Join-Path $env:TEMP "control-s-gestao-pg-password.txt"
+    [IO.File]::WriteAllText($PasswordFile, $DatabasePassword, (New-Object System.Text.UTF8Encoding($false)))
+    try {
+      & (Join-Path $PortablePostgres "bin\initdb.exe") -D $PostgresData -U postgres --encoding=UTF8 --locale=C --auth=scram-sha-256 --pwfile=$PasswordFile
+      if ($LASTEXITCODE -ne 0) { throw "Falha ao inicializar o PostgreSQL portatil." }
+    } finally { Remove-Item -LiteralPath $PasswordFile -Force -ErrorAction SilentlyContinue }
+  }
+  $PgCtl = Join-Path $PortablePostgres "bin\pg_ctl.exe"
+  if (Get-Service -Name ControlSGestaoPostgreSQL -ErrorAction SilentlyContinue) {
+    Stop-Service ControlSGestaoPostgreSQL -Force -ErrorAction SilentlyContinue
+    & $PgCtl unregister -N ControlSGestaoPostgreSQL
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao reconfigurar o servico PostgreSQL." }
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+      if (-not (Get-Service -Name ControlSGestaoPostgreSQL -ErrorAction SilentlyContinue)) { break }
+      Start-Sleep -Milliseconds 500
+    }
+    if (Get-Service -Name ControlSGestaoPostgreSQL -ErrorAction SilentlyContinue) {
+      throw "O servico PostgreSQL anterior nao foi removido completamente. Execute o atualizador novamente."
+    }
+  }
+  & $PgCtl register -N ControlSGestaoPostgreSQL -D $PostgresData -S auto -o ('"-p ' + $DatabasePort + '"')
+  if ($LASTEXITCODE -ne 0) { throw "Falha ao registrar o servico PostgreSQL." }
+  Start-Service ControlSGestaoPostgreSQL
   $Psql = Find-PostgresTool "psql"
   $PgRestore = Find-PostgresTool "pg_restore"
   $env:PGPASSWORD = $DatabasePassword
+  $PostgresReady = $false
+  for ($attempt = 0; $attempt -lt 30; $attempt++) {
+    & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d postgres -tAc "SELECT 1" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $PostgresReady = $true; break }
+    Start-Sleep -Seconds 1
+  }
+  if (-not $PostgresReady) { throw "O PostgreSQL exclusivo nao respondeu na porta $DatabasePort." }
 
   Write-Host "[3/7] Preparando banco de dados..."
-  $Exists = & $Psql -h localhost -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'"
+  $Exists = & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'"
   if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel acessar o PostgreSQL com a senha configurada." }
   $NewDatabase = $Exists.Trim() -ne "1"
   if ($NewDatabase) {
-    & $Psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DatabaseName"
+    & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DatabaseName"
     if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel criar o banco de dados da aplicacao." }
     $Backup = Join-Path $ProjectDirectory "database\seed\control_s_gestao.backup"
     if (Test-Path -LiteralPath $Backup) {
-      & $PgRestore -h localhost -p 5432 -U postgres -d $DatabaseName --no-owner --no-privileges $Backup
+      & $PgRestore -h 127.0.0.1 -p $DatabasePort -U postgres -d $DatabaseName --no-owner --no-privileges $Backup
       if ($LASTEXITCODE -gt 1) { throw "Não foi possível restaurar os dados iniciais." }
     }
   }
@@ -109,7 +115,7 @@ try {
   Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "database\migrations") -Filter "*.sql" -File |
     Sort-Object Name |
     ForEach-Object {
-      & $Psql -h localhost -p 5432 -U postgres -d $DatabaseName -v ON_ERROR_STOP=1 -f $_.FullName
+      & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d $DatabaseName -v ON_ERROR_STOP=1 -f $_.FullName
       if ($LASTEXITCODE -ne 0) { throw "Falha ao aplicar $($_.Name)." }
     }
 
@@ -120,6 +126,14 @@ try {
     if (Test-Path -LiteralPath $DeployEnv) { Copy-Item -LiteralPath $DeployEnv -Destination $EnvFile }
     else { Copy-Item -LiteralPath (Join-Path $ProjectDirectory ".env.example") -Destination $EnvFile }
   }
+  $EnvContent = [IO.File]::ReadAllText($EnvFile)
+  $DatabaseUrl = "postgres://postgres:$DatabasePassword@127.0.0.1:$DatabasePort/$DatabaseName"
+  if ($EnvContent -match '(?m)^DATABASE_URL=') {
+    $EnvContent = [Text.RegularExpressions.Regex]::Replace($EnvContent, '(?m)^DATABASE_URL=.*$', "DATABASE_URL=$DatabaseUrl")
+  } else {
+    $EnvContent = $EnvContent.TrimEnd() + [Environment]::NewLine + "DATABASE_URL=$DatabaseUrl" + [Environment]::NewLine
+  }
+  [IO.File]::WriteAllText($EnvFile, $EnvContent, (New-Object Text.UTF8Encoding($false)))
 
   Write-Host "[6/7] Verificando arquivos da aplicacao..."
   foreach ($RequiredPath in @("node_modules\vite\bin\vite.js", "apps\backend\dist\server.js", "apps\frontend\dist\index.html")) {
