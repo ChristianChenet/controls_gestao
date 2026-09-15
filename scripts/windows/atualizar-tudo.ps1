@@ -6,6 +6,7 @@ $DatabaseName = "control_s_gestao"
 $DatabasePassword = "controls"
 $DatabasePort = 5436
 $PortablePostgresRuntime = Join-Path $env:ProgramData "ControlSGestao\PostgreSQL\runtime"
+$InstallerDataDirectory = Join-Path $env:ProgramData "ControlSGestao\Installer"
 $NodeInstallerHash = "F0F66C2A80C08A30A5AB5179EE9EA9E45F9B46289436A8CC87FF833B852DB351"
 $RuntimeInstallerHash = "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
@@ -100,19 +101,25 @@ try {
   Write-Host "[3/7] Preparando banco de dados..."
   $Exists = & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'"
   if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel acessar o PostgreSQL com a senha configurada." }
-  $NewDatabase = $Exists.Trim() -ne "1"
+  $NewDatabase = (($Exists -join "").Trim()) -ne "1"
   if ($NewDatabase) {
     & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DatabaseName"
     if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel criar o banco de dados da aplicacao." }
     $Backup = Join-Path $ProjectDirectory "database\seed\control_s_gestao.backup"
     if (Test-Path -LiteralPath $Backup) {
-      & $PgRestore -h 127.0.0.1 -p $DatabasePort -U postgres -d $DatabaseName --no-owner --no-privileges $Backup
+      New-Item -ItemType Directory -Force -Path $InstallerDataDirectory | Out-Null
+      $LocalBackup = Join-Path $InstallerDataDirectory "control_s_gestao.backup"
+      Copy-Item -LiteralPath $Backup -Destination $LocalBackup -Force
+      & $PgRestore -h 127.0.0.1 -p $DatabasePort -U postgres -d $DatabaseName --no-owner --no-privileges $LocalBackup
       if ($LASTEXITCODE -gt 1) { throw "Não foi possível restaurar os dados iniciais." }
     }
   }
 
   Write-Host "[4/7] Aplicando estrutura e atualizações do banco..."
-  Get-ChildItem -LiteralPath (Join-Path $ProjectDirectory "database\migrations") -Filter "*.sql" -File |
+  $LocalMigrations = Join-Path $InstallerDataDirectory "migrations"
+  New-Item -ItemType Directory -Force -Path $LocalMigrations | Out-Null
+  Copy-Item -Path (Join-Path $ProjectDirectory "database\migrations\*.sql") -Destination $LocalMigrations -Force
+  Get-ChildItem -LiteralPath $LocalMigrations -Filter "*.sql" -File |
     Sort-Object Name |
     ForEach-Object {
       & $Psql -h 127.0.0.1 -p $DatabasePort -U postgres -d $DatabaseName -v ON_ERROR_STOP=1 -f $_.FullName
