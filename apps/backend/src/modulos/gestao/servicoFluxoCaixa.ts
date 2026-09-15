@@ -167,7 +167,7 @@ export async function carregarFiltrosOracle() {
   const portadores = porNome.oracle_fluxo_listar_portadores.linhas;
   const situacoes = porNome.oracle_fluxo_listar_situacoes.linhas;
   const analiticas = porNome.oracle_fluxo_listar_analiticas.linhas;
-  const grupos = Array.from(
+  let grupos = Array.from(
     linhasGrupo
       .reduce((map: Map<number, any>, linha: any) => {
         const id = numero(linha.IDGRUPOFILIAL);
@@ -185,6 +185,27 @@ export async function carregarFiltrosOracle() {
       }, new Map<number, any>())
       .values(),
   );
+  if (!grupos.length && filiais.length)
+    grupos = Array.from(
+      filiais
+        .reduce((map: Map<number, any>, linha: any) => {
+          const empresa = numero(linha.EMPRESA);
+          const id = -(empresa + 1);
+          const grupo = map.get(id) ?? {
+            id,
+            nome: `Empresa ${empresa}`,
+            sintetico: true,
+            itens: [],
+          };
+          grupo.itens.push({
+            estab_oracle: numero(linha.ESTAB),
+            nome_filial: linha.ESTABELECIMENTO ?? linha.RAZAOSOC,
+          });
+          map.set(id, grupo);
+          return map;
+        }, new Map<number, any>())
+        .values(),
+    );
   return {
     grupos,
     filiais,
@@ -261,12 +282,21 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
       P_TIPO_SALDO: f.tipoSaldo ?? "FINANCEIRO",
     };
     const itensGrupo = f.grupoFilialId
-      ? (
-          await executarFonteOracle<any>(
-            await fonte("oracle_fluxo_listar_grupos_filiais"),
-            {},
+      ? f.grupoFilialId < 0
+        ? (
+            await executarFonteOracle<any>(
+              await fonte("oracle_fluxo_listar_filiais"),
+              {},
+            )
+          ).filter(
+            (x) => numero(x.EMPRESA) === Math.abs(numero(f.grupoFilialId)) - 1,
           )
-        ).filter((x) => numero(x.IDGRUPOFILIAL) === numero(f.grupoFilialId))
+        : (
+            await executarFonteOracle<any>(
+              await fonte("oracle_fluxo_listar_grupos_filiais"),
+              {},
+            )
+          ).filter((x) => numero(x.IDGRUPOFILIAL) === numero(f.grupoFilialId))
       : [];
     const escopos = f.estab
       ? [f.estab]
@@ -365,7 +395,49 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
         ],
       );
     }
+    for (const realizado of realizados)
+      await consultar(
+        `INSERT INTO gestao_fluxo_detalhe(processo_id,estab_oracle,data_fluxo,tipo_movimento,grupo_movimento,origem_movimento,valor_original,valor_entrada,valor_saida,valor_liquido,historico,dados_origem_json)
+         VALUES($1,$2,$3,'ENTRADA_REALIZADA','RECEBIMENTOS_REALIZADOS',$4,$5,$5,0,$5,$6,$7)`,
+        [
+          processo.id,
+          realizado.ESTAB,
+          iso(realizado.DATA_RECEBIMENTO),
+          realizado.TIPO_FINALIZADOR,
+          numero(realizado.VALOR),
+          `Recebimento realizado por ${realizado.TIPO_FINALIZADOR}`,
+          JSON.stringify(realizado),
+        ],
+      );
+    for (const pagamento of pagamentos)
+      await consultar(
+        `INSERT INTO gestao_fluxo_detalhe(processo_id,estab_oracle,data_fluxo,tipo_movimento,grupo_movimento,origem_movimento,id_documento_oracle,id_pessoa_oracle,id_analitica_oracle,valor_original,valor_entrada,valor_saida,valor_liquido,historico,dados_origem_json)
+         VALUES($1,$2,$3,'SAIDA_REALIZADA','PAGAMENTOS_REALIZADOS','DUPPAG',$4,$5,$6,$7,0,$7,-$7,'Pagamento realizado',$8)`,
+        [
+          processo.id,
+          pagamento.ESTAB,
+          iso(pagamento.DATA_PAGAMENTO),
+          String(pagamento.ID_DOCUMENTO_ORACLE ?? ""),
+          pagamento.ID_PESSOA_ORACLE,
+          pagamento.ID_ANALITICA_ORACLE,
+          numero(pagamento.VALOR),
+          JSON.stringify(pagamento),
+        ],
+      );
     const saldoInicial = saldos.reduce((s, r) => s + numero(r.SALDO), 0);
+    for (const saldo of saldos)
+      await consultar(
+        `INSERT INTO gestao_fluxo_saldo_detalhe(processo_id,estab_oracle,id_portador_oracle,portador,tipo_saldo,valor)
+         VALUES($1,$2,$3,$4,$5,$6)`,
+        [
+          processo.id,
+          saldo.ESTAB,
+          saldo.IDPORTADOR,
+          saldo.PORTADOR,
+          f.tipoSaldo ?? "FINANCEIRO",
+          numero(saldo.SALDO),
+        ],
+      );
     let acumulado = saldoInicial;
     for (
       let d = new Date(`${f.dataInicial}T12:00:00`),

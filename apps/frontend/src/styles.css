@@ -413,9 +413,10 @@ textarea {
 .barraConsulta {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   gap: 12px;
   margin: -10px 0 18px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 1px 0 8px;
 }
 .barraConsulta .periodosRapidos,
@@ -435,6 +436,7 @@ textarea {
 }
 .barraConsulta .visoesFluxo {
   align-items: end;
+  margin-left: auto;
 }
 .seletoresEscopo {
   display: flex;
@@ -712,6 +714,180 @@ textarea {
   justify-content: space-between;
   min-width: 0;
   box-shadow: 0 5px 16px #17363d09;
+}
+.cards article.clicavel {
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.cards article.clicavel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(2, 32, 39, 0.11);
+}
+.cards article.destaque small {
+  color: #ff9a9a;
+  font-weight: 700;
+}
+.datasPrincipais {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.datasPrincipais label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.datasPrincipais input {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 9px;
+  background: #fff;
+  color: var(--ink);
+}
+.atualizarPrincipal {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 14px;
+  color: #fff;
+  background: linear-gradient(180deg, #39ee36, #00a72d);
+  font-weight: 800;
+}
+.atualizarPrincipal svg {
+  width: 15px;
+}
+.periodoFiltrado {
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.modalIndicador {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(0, 16, 20, 0.64);
+  backdrop-filter: blur(4px);
+}
+.modalIndicador > section {
+  width: min(1240px, 96vw);
+  height: min(780px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+}
+.modalIndicador header,
+.modalIndicador footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.modalIndicador footer {
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+}
+.modalIndicador header span,
+.modalIndicador header p,
+.modalIndicador footer span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.modalIndicador header h2 {
+  margin: 3px 0;
+}
+.modalIndicador header button,
+.modalIndicador footer button {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 13px;
+  background: #fff;
+  font-weight: 700;
+}
+.modalIndicador header button {
+  padding: 9px;
+}
+.modalIndicador header svg {
+  width: 18px;
+}
+.tabelaDetalheIndicador {
+  flex: 1;
+  overflow: auto;
+}
+.tabelaDetalheIndicador table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+.tabelaDetalheIndicador th,
+.tabelaDetalheIndicador td {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.tabelaDetalheIndicador th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f3f7f6;
+}
+.tabelaDetalheIndicador .valor {
+  text-align: right;
+  font-weight: 800;
+}
+.editorRapido > section {
+  width: min(1100px, 96vw);
+}
+.editorRapido > section > label {
+  display: grid;
+  gap: 6px;
+  margin: 14px 22px 0;
+  font-weight: 700;
+}
+.editorRapido select {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 10px;
+}
+.editorRapido textarea {
+  flex: 1;
+  margin: 14px 22px;
+  padding: 16px;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #081115;
+  color: #d7ffdd;
+  font:
+    13px/1.5 Consolas,
+    monospace;
+}
+.editorRapido footer {
+  justify-content: flex-end;
+}
+.editorRapido footer span {
+  margin-right: auto;
+}
+.editorRapido footer button.salvar {
+  color: #fff;
+  border-color: #00ad32;
+  background: #00ad32;
 }
 .cards article > div {
   display: grid;
@@ -1738,6 +1914,34 @@ textarea {
     height: 96vh;
     min-height: 0;
   }
+  .barraConsulta {
+    align-items: stretch;
+  }
+  .datasPrincipais {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .datasPrincipais label {
+    flex: 1 1 135px;
+  }
+  .datasPrincipais input {
+    width: 100%;
+  }
+  .atualizarPrincipal {
+    flex: 1 1 170px;
+    justify-content: center;
+  }
+  .periodoFiltrado {
+    width: 100%;
+    white-space: normal;
+  }
+  .modalIndicador {
+    padding: 8px;
+  }
+  .modalIndicador > section {
+    width: 100%;
+    height: 96vh;
+  }
 }
 @media (max-width: 560px) {
   .topo {
@@ -1760,5 +1964,22 @@ textarea {
   .adminModal form {
     max-height: 92vh;
     overflow: auto;
+  }
+  .seletoresEscopo {
+    width: 100%;
+  }
+  .seletoresEscopo label {
+    flex: 1 1 100%;
+  }
+  .visoesFluxo {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .modalIndicador header,
+  .modalIndicador footer {
+    padding: 13px;
+  }
+  .editorRapido textarea {
+    margin: 10px 13px;
   }
 }

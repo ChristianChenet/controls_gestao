@@ -393,9 +393,63 @@ export async function criarApp() {
     { preHandler: exigir("gestao.fluxo_caixa.visualizar") },
     async (req) =>
       consultarUm(
-        `SELECT p.*,MIN(d.saldo_projetado) menor_saldo,MIN(d.data_fluxo) FILTER(WHERE d.saldo_projetado<0) primeiro_dia_negativo,SUM(d.entradas_previstas) entradas_previstas,SUM(d.saidas_previstas) saidas_previstas,SUM(d.previsao_inteligente) previsao_inteligente,MAX(d.saldo_projetado) FILTER(WHERE d.data_fluxo=p.data_final) saldo_final FROM gestao_fluxo_processo p LEFT JOIN gestao_fluxo_dia d ON d.processo_id=p.id WHERE p.id=$1 GROUP BY p.id`,
+        `SELECT p.*,MIN(d.saldo_projetado) menor_saldo,
+          (SELECT md.data_fluxo FROM gestao_fluxo_dia md WHERE md.processo_id=p.id ORDER BY md.saldo_projetado,md.data_fluxo LIMIT 1) data_menor_saldo,
+          SUM(d.entradas_previstas) entradas_previstas,SUM(d.saidas_previstas) saidas_previstas,SUM(d.previsao_inteligente) previsao_inteligente,
+          MAX(d.saldo_projetado) FILTER(WHERE d.data_fluxo=p.data_final) saldo_final
+         FROM gestao_fluxo_processo p LEFT JOIN gestao_fluxo_dia d ON d.processo_id=p.id WHERE p.id=$1 GROUP BY p.id`,
         [Number((req.params as any).id)],
       ),
+  );
+  app.get(
+    "/gestao/fluxo-caixa/processos/:id/saldos",
+    { preHandler: exigir("gestao.fluxo_caixa.ver_detalhe") },
+    async (req) =>
+      consultar(
+        "SELECT * FROM gestao_fluxo_saldo_detalhe WHERE processo_id=$1 ORDER BY estab_oracle,portador",
+        [Number((req.params as any).id)],
+      ),
+  );
+  app.get(
+    "/gestao/indicadores/fontes/:nome",
+    { preHandler: exigir("gestao.indicador.editar_fonte") },
+    async (req, res) => {
+      const resultado = await consultarUm(
+        "SELECT * FROM gestao_fonte_dados WHERE nome=$1 AND ativo=TRUE",
+        [(req.params as any).nome],
+      );
+      return (
+        resultado ?? res.code(404).send({ mensagem: "Fonte não encontrada." })
+      );
+    },
+  );
+  app.put(
+    "/gestao/indicadores/fontes/:nome",
+    { preHandler: exigir("gestao.indicador.editar_fonte") },
+    async (req, res) => {
+      const nome = String((req.params as any).nome),
+        b = req.body as any,
+        atual = await consultarUm<any>(
+          "SELECT * FROM gestao_fonte_dados WHERE nome=$1 AND ativo=TRUE",
+          [nome],
+        );
+      if (!atual)
+        return res.code(404).send({ mensagem: "Fonte não encontrada." });
+      await consultar(
+        "INSERT INTO gestao_fonte_dados_versao(fonte_dados_id,versao,sql_texto,parametros_json,alterado_por,observacao) VALUES($1,COALESCE((SELECT MAX(versao)+1 FROM gestao_fonte_dados_versao WHERE fonte_dados_id=$1),1),$2,$3,$4,$5)",
+        [
+          atual.id,
+          atual.sql_texto,
+          JSON.stringify(atual.parametros_json),
+          req.user.id,
+          "Versão anterior à edição pelo indicador",
+        ],
+      );
+      return consultarUm(
+        "UPDATE gestao_fonte_dados SET sql_texto=$2,parametros_json=$3,atualizado_por=$4,atualizado_em=NOW() WHERE id=$1 RETURNING *",
+        [atual.id, b.sqlTexto, JSON.stringify(b.parametros ?? {}), req.user.id],
+      );
+    },
   );
   app.get(
     "/gestao/fluxo-caixa/processos/:id/semanas",

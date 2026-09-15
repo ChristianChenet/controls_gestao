@@ -36,6 +36,9 @@ type Dia = {
   investimentos: number;
   amortizacao_emprestimos: number;
   previsao_inteligente: number;
+  previsao_dinheiro: number;
+  previsao_pix: number;
+  previsao_cartao_debito: number;
   movimento_liquido: number;
   saldo_projetado: number;
   status_caixa: string;
@@ -67,6 +70,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     [resumo, setResumo] = useState<any>({}),
     [insights, setInsights] = useState<any[]>([]),
     [detalhes, setDetalhes] = useState<any[]>([]),
+    [saldos, setSaldos] = useState<any[]>([]),
     [gruposFiliais, setGruposFiliais] = useState<any[]>([]),
     [opcoesOracle, setOpcoesOracle] = useState<any>({
       filiais: [],
@@ -87,6 +91,8 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       "DASHBOARD" | "CALENDARIO" | "HORIZONTAL" | "VERTICAL"
     >("DASHBOARD"),
     [filtrosAbertos, setFiltrosAbertos] = useState(false),
+    [detalheIndicador, setDetalheIndicador] = useState<string>(),
+    [editorIndicador, setEditorIndicador] = useState<any>(),
     [aba, setAba] = useState<"fluxo" | "fontes" | "administracao">("fluxo");
   const usuario = JSON.parse(localStorage.getItem("gestao_usuario") ?? "{}");
   const empresaAtiva = usuario.empresas?.[0];
@@ -140,7 +146,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
         body: JSON.stringify(f),
       });
       setId(p.id);
-      const [d, r, i, det] = await Promise.all([
+      const [d, r, i, det, sal] = await Promise.all([
         api<Dia[]>(`/gestao/fluxo-caixa/processos/${p.id}/dias`),
         api<any>(`/gestao/fluxo-caixa/processos/${p.id}/resumo`),
         pode("gestao.fluxo_caixa.ver_insights")
@@ -149,11 +155,15 @@ export function Gestao({ onSair }: { onSair: () => void }) {
         pode("gestao.fluxo_caixa.ver_detalhe")
           ? api<any[]>(`/gestao/fluxo-caixa/processos/${p.id}/detalhes`)
           : [],
+        pode("gestao.fluxo_caixa.ver_detalhe")
+          ? api<any[]>(`/gestao/fluxo-caixa/processos/${p.id}/saldos`)
+          : [],
       ]);
       setDias(d);
       setResumo(r);
       setInsights(i);
       setDetalhes(det);
+      setSaldos(sal);
     } catch (e: any) {
       setErro(e.message);
     } finally {
@@ -201,9 +211,12 @@ export function Gestao({ onSair }: { onSair: () => void }) {
     ],
   ] as const;
   const cardsDashboard = [
-    ...cards,
-    ["Contas a receber", resumo.entradas_previstas, ArrowUpRight, "bom"],
-    ["Contas a pagar", resumo.saidas_previstas, ArrowDownRight, "ruim"],
+    cards[0],
+    cards[2],
+    cards[3],
+    cards[1],
+    cards[4],
+    cards[5],
     [
       "Clientes vencidos",
       detalhes
@@ -215,6 +228,48 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       "ruim",
     ],
   ] as const;
+  const fontesPorIndicador: Record<string, string[]> = {
+    "Saldo inicial": ["oracle_fluxo_saldo_portador"],
+    "Entradas previstas": [
+      "oracle_fluxo_movimentos_detalhe",
+      "oracle_fluxo_previsao_recebimentos_historico",
+    ],
+    "Saídas previstas": ["oracle_fluxo_movimentos_detalhe"],
+    "Saldo final projetado": [
+      "oracle_fluxo_saldo_portador",
+      "oracle_fluxo_movimentos_detalhe",
+      "oracle_fluxo_previsao_recebimentos_historico",
+    ],
+    "Menor saldo": [
+      "oracle_fluxo_saldo_portador",
+      "oracle_fluxo_movimentos_detalhe",
+    ],
+    "Previsão inteligente": ["oracle_fluxo_previsao_recebimentos_historico"],
+    "Clientes vencidos": ["oracle_fluxo_movimentos_detalhe"],
+    "Entradas e saídas por dia": ["oracle_fluxo_movimentos_detalhe"],
+  };
+  async function abrirEditorIndicador(indicador: string) {
+    if (!pode("gestao.indicador.editar_fonte")) return;
+    const nomes = fontesPorIndicador[indicador] ?? [
+      "oracle_fluxo_movimentos_detalhe",
+    ];
+    const fonte = await api<any>(`/gestao/indicadores/fontes/${nomes[0]}`);
+    setEditorIndicador({ indicador, nomes, fonte });
+  }
+  async function trocarFonteIndicador(nome: string) {
+    const fonte = await api<any>(`/gestao/indicadores/fontes/${nome}`);
+    setEditorIndicador((atual: any) => ({ ...atual, fonte }));
+  }
+  async function salvarFonteIndicador() {
+    await api(`/gestao/indicadores/fontes/${editorIndicador.fonte.nome}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        sqlTexto: editorIndicador.fonte.sql_texto,
+        parametros: editorIndicador.fonte.parametros_json,
+      }),
+    });
+    setEditorIndicador(undefined);
+  }
   const max = Math.max(
     1,
     ...dias.map((d) =>
@@ -228,6 +283,39 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       ),
     [detalhes, dia],
   );
+  const diasGrade = useMemo(() => {
+    if (f.visao === "DIA") return dias;
+    const grupos = new Map<string, Dia[]>();
+    for (const item of dias) {
+      const data = new Date(item.data_fluxo.slice(0, 10) + "T12:00");
+      if (f.visao === "SEMANA") {
+        const deslocamento = (data.getDay() + 6) % 7;
+        data.setDate(data.getDate() - deslocamento);
+      } else data.setDate(1);
+      const chave = data.toISOString().slice(0, 10);
+      grupos.set(chave, [...(grupos.get(chave) ?? []), item]);
+    }
+    return Array.from(grupos.entries()).map(([data_fluxo, itens]) => {
+      const soma = (campo: keyof Dia) =>
+        itens.reduce((total, item) => total + Number(item[campo] ?? 0), 0);
+      return {
+        ...itens[0],
+        data_fluxo,
+        entradas_previstas: soma("entradas_previstas"),
+        entradas_realizadas: soma("entradas_realizadas"),
+        saidas_previstas: soma("saidas_previstas"),
+        saidas_realizadas: soma("saidas_realizadas"),
+        receitas_financeiras: soma("receitas_financeiras"),
+        pagamentos_fornecedores: soma("pagamentos_fornecedores"),
+        pagamentos_despesas: soma("pagamentos_despesas"),
+        investimentos: soma("investimentos"),
+        amortizacao_emprestimos: soma("amortizacao_emprestimos"),
+        previsao_inteligente: soma("previsao_inteligente"),
+        movimento_liquido: soma("movimento_liquido"),
+        saldo_projetado: itens[itens.length - 1].saldo_projetado,
+      } as Dia;
+    });
+  }, [dias, f.visao]);
   const definirPeriodo = (
     quantidade: number,
     visao = "DIA",
@@ -594,44 +682,33 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               </div>
             </header>
             <div className="barraConsulta">
-              <div className="periodosRapidos">
+              <div className="datasPrincipais">
+                <label>
+                  De
+                  <input
+                    type="date"
+                    value={f.dataInicial}
+                    onChange={(e) =>
+                      setF({ ...f, dataInicial: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Até
+                  <input
+                    type="date"
+                    value={f.dataFinal}
+                    onChange={(e) => setF({ ...f, dataFinal: e.target.value })}
+                  />
+                </label>
                 <button
-                  className={periodoRapido === "HOJE" ? "ativo" : ""}
-                  onClick={() => definirPeriodo(1, "DIA", "HOJE")}
+                  className="atualizarPrincipal"
+                  disabled={carregando || !pode("gestao.fluxo_caixa.processar")}
+                  onClick={processar}
                 >
-                  Hoje
+                  <RefreshCw className={carregando ? "girar" : ""} />
+                  {carregando ? "Carregando dados" : "Atualizar dados"}
                 </button>
-                <button
-                  className={periodoRapido === "7_DIAS" ? "ativo" : ""}
-                  onClick={() => definirPeriodo(7, "DIA", "7_DIAS")}
-                >
-                  7 dias
-                </button>
-                <button
-                  className={periodoRapido === "30_DIAS" ? "ativo" : ""}
-                  onClick={() => definirPeriodo(30, "DIA", "30_DIAS")}
-                >
-                  30 dias
-                </button>
-                <button
-                  className={periodoRapido === "SEMANA" ? "ativo" : ""}
-                  onClick={() => definirPeriodo(7, "SEMANA", "SEMANA")}
-                >
-                  Semana
-                </button>
-                <button
-                  className={periodoRapido === "MES" ? "ativo" : ""}
-                  onClick={() => definirPeriodo(31, "MÊS", "MES")}
-                >
-                  Mês
-                </button>
-                <span>
-                  {new Date(f.dataInicial + "T12:00").toLocaleDateString(
-                    "pt-BR",
-                  )}{" "}
-                  —{" "}
-                  {new Date(f.dataFinal + "T12:00").toLocaleDateString("pt-BR")}
-                </span>
               </div>
               <div className="seletoresEscopo">
                 <label>
@@ -692,6 +769,11 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   </button>
                 ))}
               </nav>
+              <strong className="periodoFiltrado">
+                Período:{" "}
+                {new Date(f.dataInicial + "T12:00").toLocaleDateString("pt-BR")}{" "}
+                — {new Date(f.dataFinal + "T12:00").toLocaleDateString("pt-BR")}
+              </strong>
             </div>
             <section
               className={
@@ -722,14 +804,31 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               }
             >
               {cardsDashboard.map(([l, v, I, c]) => (
-                <article className={c} key={l}>
+                <article
+                  className={`${c} clicavel`}
+                  key={l}
+                  title={
+                    pode("gestao.indicador.editar_fonte")
+                      ? "Clique para detalhar · botão direito para editar a fonte"
+                      : "Clique para detalhar"
+                  }
+                  onClick={() => setDetalheIndicador(l)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    abrirEditorIndicador(l).catch((x) => setErro(x.message));
+                  }}
+                >
                   <div>
                     <span>{l}</span>
                     <strong>{moeda(v)}</strong>
                     <small>
                       {l === "Previsão inteligente"
-                        ? "Média por dia da semana"
-                        : "No período selecionado"}
+                        ? "Considerada nas entradas previstas"
+                        : l === "Menor saldo" && resumo.data_menor_saldo
+                          ? `Em ${new Date(resumo.data_menor_saldo.slice(0, 10) + "T12:00").toLocaleDateString("pt-BR")}`
+                          : l === "Saldo inicial"
+                            ? `Saldo ${f.tipoSaldo === "CONCILIADO" ? "conciliado" : "financeiro"}`
+                            : "Clique para ver os detalhes"}
                     </small>
                   </div>
                   <I />
@@ -738,21 +837,17 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </section>
             <section
               className={`painel fluxo ${visaoPrincipal !== "CALENDARIO" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizadaVisao" : ""}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                abrirEditorIndicador("Saldo final projetado").catch((x) =>
+                  setErro(x.message),
+                );
+              }}
             >
               <header>
                 <div>
                   <h2>Calendário financeiro</h2>
                   <p>Saldo, entradas e saídas por dia</p>
-                </div>
-                <div className="segmentado">
-                  {["DIA", "SEMANA", "MÊS"].map((v) => (
-                    <button
-                      className={f.visao === v ? "ativo" : ""}
-                      onClick={() => setF({ ...f, visao: v })}
-                    >
-                      {v}
-                    </button>
-                  ))}
                 </div>
                 {acoesDaVisao()}
               </header>
@@ -799,11 +894,27 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </section>
             <section
               className={`painel gradeFluxo ${visaoPrincipal !== "HORIZONTAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                abrirEditorIndicador("Saldo final projetado").catch((x) =>
+                  setErro(x.message),
+                );
+              }}
             >
               <header>
                 <div>
-                  <h2>Contas a pagar x contas a receber</h2>
+                  <h2>Fluxo de caixa horizontal</h2>
                   <p>Visão rápida para antecipar os dias que exigem caixa</p>
+                </div>
+                <div className="segmentado">
+                  {["DIA", "SEMANA", "MÊS"].map((v) => (
+                    <button
+                      className={f.visao === v ? "ativo" : ""}
+                      onClick={() => setF({ ...f, visao: v })}
+                    >
+                      {v}
+                    </button>
+                  ))}
                 </div>
                 <button
                   className="maximizar"
@@ -822,7 +933,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   <thead>
                     <tr>
                       <th>FLUXO / PERÍODO</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <th>{dataBr(d.data_fluxo)}</th>
                       ))}
                     </tr>
@@ -830,7 +941,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   <tbody>
                     <tr>
                       <th>(+) CONTAS A RECEBER</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="positivo">
                           {moeda(d.entradas_previstas)}
                         </td>
@@ -838,7 +949,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(+) RECEBIMENTO REALIZADO</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="positivo">
                           {moeda(d.entradas_realizadas)}
                         </td>
@@ -846,7 +957,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(+) RECEITAS FINANCEIRAS / RENDIMENTOS</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="positivo">
                           {moeda(d.receitas_financeiras)}
                         </td>
@@ -854,7 +965,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(-) CONTAS A PAGAR</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.saidas_previstas)}
                         </td>
@@ -862,7 +973,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(-) PAGAMENTOS REALIZADOS</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.saidas_realizadas)}
                         </td>
@@ -870,7 +981,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(-) PAGAMENTOS FORNECEDORES</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.pagamentos_fornecedores)}
                         </td>
@@ -878,7 +989,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(-) PAGAMENTOS DESPESAS</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.pagamentos_despesas)}
                         </td>
@@ -886,13 +997,13 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(-) INVESTIMENTOS / COMPRA DE ATIVOS</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">{moeda(d.investimentos)}</td>
                       ))}
                     </tr>
                     <tr>
                       <th>(-) AMORTIZAÇÃO DE EMPRÉSTIMOS</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.amortizacao_emprestimos)}
                         </td>
@@ -900,7 +1011,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(=) FLUXO LÍQUIDO</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td
                           className={
                             Number(d.movimento_liquido) < 0
@@ -914,7 +1025,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                     <tr>
                       <th>(=) SALDO PROJETADO</th>
-                      {dias.map((d) => (
+                      {diasGrade.map((d) => (
                         <td
                           className={
                             Number(d.saldo_projetado) < 0 ? "risco" : ""
@@ -930,11 +1041,27 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </section>
             <section
               className={`painel gradeFluxo fluxoVertical ${visaoPrincipal !== "VERTICAL" ? "ocultaVisao" : ""} ${gradeMaximizada ? "maximizada" : ""}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                abrirEditorIndicador("Saldo final projetado").catch((x) =>
+                  setErro(x.message),
+                );
+              }}
             >
               <header>
                 <div>
                   <h2>Fluxo de caixa vertical</h2>
                   <p>Indicadores financeiros organizados por dia</p>
+                </div>
+                <div className="segmentado">
+                  {["DIA", "SEMANA", "MÊS"].map((v) => (
+                    <button
+                      className={f.visao === v ? "ativo" : ""}
+                      onClick={() => setF({ ...f, visao: v })}
+                    >
+                      {v}
+                    </button>
+                  ))}
                 </div>
                 {acoesDaVisao()}
               </header>
@@ -954,7 +1081,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {dias.map((d) => (
+                    {diasGrade.map((d) => (
                       <tr onClick={() => setDia(d)}>
                         <th>{dataBr(d.data_fluxo)}</th>
                         <td>{moeda(d.disponivel_inicial)}</td>
@@ -1002,11 +1129,20 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               <section className="painel tendencia">
                 <header>
                   <div>
-                    <h2>A pagar x a receber por dia</h2>
-                    <p>Verde: recebimentos · Vermelho: pagamentos</p>
+                    <h2>Entradas e saídas por dia</h2>
+                    <p>Verde: entradas · Vermelho: saídas</p>
                   </div>
                 </header>
-                <div className="barras">
+                <div
+                  className="barras"
+                  onClick={() => setDetalheIndicador("Saldo final projetado")}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    abrirEditorIndicador("Entradas e saídas por dia").catch(
+                      (x) => setErro(x.message),
+                    );
+                  }}
+                >
                   {dias.slice(0, 14).map((d) => (
                     <div
                       className={
@@ -1062,6 +1198,244 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               Usuário: {usuario.nome || usuario.email || "Conectado"}
             </div>
           </main>
+          {detalheIndicador && (
+            <div className="modalIndicador" role="dialog" aria-modal="true">
+              <section>
+                <header>
+                  <div>
+                    <span>Detalhamento do indicador</span>
+                    <h2>{detalheIndicador}</h2>
+                    <p>
+                      Período{" "}
+                      {new Date(f.dataInicial + "T12:00").toLocaleDateString(
+                        "pt-BR",
+                      )}{" "}
+                      a{" "}
+                      {new Date(f.dataFinal + "T12:00").toLocaleDateString(
+                        "pt-BR",
+                      )}
+                      {detalheIndicador === "Saldo inicial" &&
+                        ` · Saldo ${f.tipoSaldo === "CONCILIADO" ? "conciliado" : "financeiro"}`}
+                    </p>
+                  </div>
+                  <button onClick={() => setDetalheIndicador(undefined)}>
+                    <X />
+                  </button>
+                </header>
+                <div className="tabelaDetalheIndicador">
+                  {detalheIndicador === "Saldo inicial" ? (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Estab.</th>
+                          <th>Portador</th>
+                          <th>Tipo do saldo</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {saldos.map((x) => (
+                          <tr key={x.id}>
+                            <td>{x.estab_oracle}</td>
+                            <td>
+                              {x.id_portador_oracle} - {x.portador}
+                            </td>
+                            <td>
+                              {x.tipo_saldo === "CONCILIADO"
+                                ? "Conciliado"
+                                : "Financeiro"}
+                            </td>
+                            <td className="valor">{moeda(x.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Data</th>
+                          <th>Tipo</th>
+                          <th>Forma / origem</th>
+                          <th>Documento</th>
+                          <th>Fornecedor / cliente</th>
+                          <th>Portador</th>
+                          <th>Vencimento</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalhes
+                          .filter((x) =>
+                            detalheIndicador === "Entradas previstas"
+                              ? x.tipo_movimento === "ENTRADA"
+                              : detalheIndicador === "Saídas previstas"
+                                ? x.tipo_movimento === "SAIDA"
+                                : detalheIndicador === "Clientes vencidos"
+                                  ? x.tipo_movimento === "ENTRADA" &&
+                                    x.vencido_antes_periodo
+                                  : detalheIndicador === "Menor saldo" &&
+                                      resumo.data_menor_saldo
+                                    ? x.data_fluxo?.slice(0, 10) ===
+                                      resumo.data_menor_saldo?.slice(0, 10)
+                                    : true,
+                          )
+                          .map((x) => (
+                            <tr key={x.id}>
+                              <td>
+                                {x.data_fluxo
+                                  ? new Date(
+                                      x.data_fluxo.slice(0, 10) + "T12:00",
+                                    ).toLocaleDateString("pt-BR")
+                                  : ""}
+                              </td>
+                              <td>
+                                {x.tipo_movimento === "ENTRADA"
+                                  ? "Entrada prevista"
+                                  : x.tipo_movimento === "SAIDA"
+                                    ? "Saída prevista"
+                                    : x.tipo_movimento === "ENTRADA_REALIZADA"
+                                      ? "Entrada realizada"
+                                      : "Saída realizada"}
+                              </td>
+                              <td>
+                                {x.origem_movimento === "DUPREC" ||
+                                x.origem_movimento === "DUPPAG"
+                                  ? "Duplicata"
+                                  : x.origem_movimento}
+                              </td>
+                              <td>{x.documento}</td>
+                              <td>
+                                {x.pessoa ||
+                                  (x.id_pessoa_oracle
+                                    ? `Pessoa ${x.id_pessoa_oracle}`
+                                    : "—")}
+                              </td>
+                              <td>{x.portador}</td>
+                              <td>
+                                {x.data_vencimento
+                                  ? new Date(
+                                      x.data_vencimento.slice(0, 10) + "T12:00",
+                                    ).toLocaleDateString("pt-BR")
+                                  : ""}
+                              </td>
+                              <td
+                                className={
+                                  x.tipo_movimento.startsWith("ENTRADA")
+                                    ? "verde valor"
+                                    : "vermelho valor"
+                                }
+                              >
+                                {moeda(
+                                  x.tipo_movimento.startsWith("ENTRADA")
+                                    ? x.valor_entrada
+                                    : x.valor_saida,
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        {detalheIndicador === "Previsão inteligente" &&
+                          dias.flatMap((d) =>
+                            [
+                              ["Dinheiro", d.previsao_dinheiro],
+                              ["PIX", d.previsao_pix],
+                              ["Cartão de débito", d.previsao_cartao_debito],
+                            ]
+                              .filter((x) => Number(x[1]) > 0)
+                              .map((x) => (
+                                <tr key={`${d.id}-${x[0]}`}>
+                                  <td>{dataBr(d.data_fluxo)}</td>
+                                  <td>Previsão</td>
+                                  <td>{x[0]}</td>
+                                  <td>—</td>
+                                  <td>Histórico médio</td>
+                                  <td>—</td>
+                                  <td>—</td>
+                                  <td className="verde valor">{moeda(x[1])}</td>
+                                </tr>
+                              )),
+                          )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <footer>
+                  <span>
+                    {detalheIndicador === "Previsão inteligente"
+                      ? "Este valor já está considerado em Entradas previstas."
+                      : "Detalhes vinculados ao processamento atual."}
+                  </span>
+                  <button onClick={() => setDetalheIndicador(undefined)}>
+                    Fechar
+                  </button>
+                </footer>
+              </section>
+            </div>
+          )}
+          {editorIndicador && (
+            <div
+              className="modalIndicador editorRapido"
+              role="dialog"
+              aria-modal="true"
+            >
+              <section>
+                <header>
+                  <div>
+                    <span>Edição rápida pelo indicador</span>
+                    <h2>{editorIndicador.indicador}</h2>
+                    <p>As alterações ficam versionadas e auditadas.</p>
+                  </div>
+                  <button onClick={() => setEditorIndicador(undefined)}>
+                    <X />
+                  </button>
+                </header>
+                <label>
+                  Fonte de dados
+                  <select
+                    value={editorIndicador.fonte.nome}
+                    onChange={(e) =>
+                      trocarFonteIndicador(e.target.value).catch((x) =>
+                        setErro(x.message),
+                      )
+                    }
+                  >
+                    {editorIndicador.nomes.map((nome: string) => (
+                      <option value={nome}>{nome}</option>
+                    ))}
+                  </select>
+                </label>
+                <textarea
+                  value={editorIndicador.fonte.sql_texto}
+                  onChange={(e) =>
+                    setEditorIndicador({
+                      ...editorIndicador,
+                      fonte: {
+                        ...editorIndicador.fonte,
+                        sql_texto: e.target.value,
+                      },
+                    })
+                  }
+                />
+                <footer>
+                  <span>
+                    Use dois espaços na identação do SQL para facilitar a
+                    análise.
+                  </span>
+                  <button onClick={() => setEditorIndicador(undefined)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="salvar"
+                    onClick={() =>
+                      salvarFonteIndicador().catch((x) => setErro(x.message))
+                    }
+                  >
+                    Salvar nova versão
+                  </button>
+                </footer>
+              </section>
+            </div>
+          )}
           {dia && (
             <aside className="drawer">
               <header>
