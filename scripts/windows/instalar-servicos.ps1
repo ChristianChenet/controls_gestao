@@ -1,15 +1,27 @@
-param([switch]$SkipBuild)
+param(
+  [switch]$SkipBuild,
+  [string]$NodePath = ""
+)
 $ErrorActionPreference = "Stop"
 $ProjectDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $Nssm = "C:\nssm\win64\nssm.exe"
 $BundledNssm = Join-Path $ProjectDirectory "tools\nssm\nssm-2.24-101-g897c7ad\win64\nssm.exe"
 if (-not (Test-Path -LiteralPath $Nssm)) { $Nssm = $BundledNssm }
 $NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
-$Node = if ($NodeCommand) { $NodeCommand.Source } else { $null }
+$NodeCandidates = @(
+  $NodePath,
+  $(if ($NodeCommand) { $NodeCommand.Path }),
+  $(if ($NodeCommand) { $NodeCommand.Source }),
+  $(if ($NodeCommand) { $NodeCommand.Definition }),
+  "C:\Program Files\nodejs\node.exe"
+)
+$Node = $NodeCandidates |
+  Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+  Select-Object -First 1
 $Vite = Join-Path $ProjectDirectory "node_modules\vite\bin\vite.js"
 $Logs = Join-Path $ProjectDirectory "logs"
 if (-not (Test-Path -LiteralPath $Nssm)) { throw "NSSM não encontrado em $Nssm" }
-if (-not $Node -or -not (Test-Path -LiteralPath $Node)) { throw "Node.js não encontrado." }
+if (-not $Node) { throw "Node.js não encontrado." }
 
 function Invoke-NssmChecked {
   param([Parameter(ValueFromRemainingArguments = $true)][string[]]$NssmArguments)
@@ -24,6 +36,13 @@ try {
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
       & $Nssm stop $ServiceName confirm
       & $Nssm remove $ServiceName confirm
+      for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 500
+      }
+      if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        throw "O servico anterior $ServiceName nao foi removido."
+      }
     }
   }
   Invoke-NssmChecked install ControlSGestaoBackend $Node "apps\backend\dist\server.js"

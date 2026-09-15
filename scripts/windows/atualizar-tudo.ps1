@@ -33,6 +33,16 @@ try {
     } else { throw "Instalador offline do Node.js nao encontrado." }
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
   }
+  $NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+  $NodeExecutable = @(
+    $(if ($NodeCommand) { $NodeCommand.Path }),
+    $(if ($NodeCommand) { $NodeCommand.Source }),
+    $(if ($NodeCommand) { $NodeCommand.Definition }),
+    "C:\Program Files\nodejs\node.exe"
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+  if (-not $NodeExecutable) {
+    throw "Node.js nao foi localizado depois da verificacao."
+  }
 
   Write-Host "[2/7] Verificando PostgreSQL..."
   $PortablePostgresSource = Join-Path $ProjectDirectory "tools\postgresql-portable"
@@ -150,7 +160,7 @@ try {
   }
 
   Write-Host "[7/7] Instalando e iniciando serviços Windows..."
-  & (Join-Path $PSScriptRoot "instalar-servicos.ps1") -SkipBuild
+  & (Join-Path $PSScriptRoot "instalar-servicos.ps1") -SkipBuild -NodePath $NodeExecutable
   if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar os serviços Windows." }
 
   $BackendReady = $false
@@ -169,6 +179,13 @@ try {
   }
   if (-not $BackendReady) { throw "O serviço interno de login não iniciou. Consulte logs\backend-error.log." }
   if (-not $FrontendReady) { throw "A interface não iniciou. Consulte logs\frontend-error.log." }
+  try {
+    $LoginBody = @{ email = "christian@controlsconsultoria.com.br"; senha = "Christian2024@" } | ConvertTo-Json
+    $LoginTest = Invoke-RestMethod -Uri "http://127.0.0.1:5175/api/auth/login" -Method Post -ContentType "application/json" -Body $LoginBody -TimeoutSec 10
+    if (-not $LoginTest.sucesso -or -not $LoginTest.dados.token) { throw "Resposta de login invalida." }
+  } catch {
+    throw "A validacao automatica do login falhou. Consulte logs\backend-error.log. Detalhe: $($_.Exception.Message)"
+  }
   Start-Process "http://localhost:5175"
   Write-Host "Concluído. Acesse http://localhost:5175"
 } catch {
