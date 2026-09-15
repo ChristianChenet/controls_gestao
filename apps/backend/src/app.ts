@@ -782,6 +782,25 @@ export async function criarApp() {
     async (req, res) => {
       const id = Number((req.params as any).id),
         w = new ExcelJS.Workbook();
+      const processo = await consultarUm<any>(
+        "SELECT parametros_json,usuario_id,criado_em FROM gestao_fluxo_processo WHERE id=$1",
+        [id],
+      );
+      const parametros = processo?.parametros_json ?? {};
+      const filtrosExportacao = [
+        [
+          "Período",
+          `${parametros.dataInicial ?? ""} a ${parametros.dataFinal ?? ""}`,
+        ],
+        ["Visão financeira", "Somente projetado"],
+        ["Grupo filial", parametros.grupoFilialId ?? "Todos"],
+        ["Estabelecimento", parametros.estab ?? "Todos"],
+        ["Portadores", (parametros.idPortador ?? []).toString() || "Todos"],
+        ["Situações", (parametros.idSituacao ?? []).toString() || "Todas"],
+        ["Analíticas", (parametros.idAnalitica ?? []).toString() || "Todas"],
+        ["Saldo", parametros.tipoSaldo ?? "FINANCEIRO"],
+        ["Movimentos", parametros.tipoMovimento ?? "AMBOS"],
+      ];
       for (const [nome, sql] of [
         ["Resumo", "SELECT * FROM gestao_fluxo_processo WHERE id=$1"],
         ["Dias", "SELECT * FROM gestao_fluxo_dia WHERE processo_id=$1"],
@@ -821,6 +840,13 @@ export async function criarApp() {
           };
           s.views = [{ state: "frozen", ySplit: 1 }];
         }
+        const inicioFiltros = Math.max(s.rowCount + 3, 3);
+        s.getCell(inicioFiltros, 1).value = "FILTROS APLICADOS";
+        s.getCell(inicioFiltros, 1).font = { bold: true };
+        filtrosExportacao.forEach(([campo, valor], indice) => {
+          s.getCell(inicioFiltros + indice + 1, 1).value = campo;
+          s.getCell(inicioFiltros + indice + 1, 2).value = valor;
+        });
       }
       const buffer = await w.xlsx.writeBuffer();
       res

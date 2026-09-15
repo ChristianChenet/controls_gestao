@@ -7,12 +7,13 @@ type Filtros = {
   dataFinal: string;
   estab?: number | null;
   grupoFilialId?: number | null;
-  idPortador?: number | null;
+  idPortador?: number | number[] | null;
   idPessoa?: number | null;
-  idSituacao?: number | null;
-  idAnalitica?: number | null;
+  idSituacao?: number | number[] | null;
+  idAnalitica?: number | number[] | null;
   origem?: string | null;
   tipoSaldo?: string;
+  visaoFinanceira?: string;
   mostraProvisao?: boolean;
   mostraAdiantamento?: boolean;
   mostraEmprestimo?: boolean;
@@ -38,6 +39,12 @@ async function executarFonteOracle<T = Record<string, unknown>>(
   }
 }
 const numero = (v: unknown) => Number(v ?? 0);
+const listaBind = (v: unknown) => {
+  const itens = (Array.isArray(v) ? v : v == null ? [] : [v])
+    .map(Number)
+    .filter(Number.isFinite);
+  return itens.length ? itens.join(",") : null;
+};
 const iso = (v: unknown) => new Date(String(v)).toISOString().slice(0, 10);
 
 export async function garantirFontes(usuarioId: number) {
@@ -243,6 +250,18 @@ function previsao(detalhes: any[], ini: string, fim: string, formas: string[]) {
   return resultado;
 }
 export async function processarFluxo(f: Filtros, usuarioId: number) {
+  const hoje = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
+  f = {
+    ...f,
+    dataInicial: f.dataInicial < hoje ? hoje : f.dataInicial,
+    visaoFinanceira: "PROJETADO",
+  };
+  if (!f.dataInicial || !f.dataFinal || f.dataFinal < f.dataInicial)
+    throw new Error(
+      "Informe um período válido, começando hoje ou em uma data futura.",
+    );
   const processo = await consultarUm<any>(
     `INSERT INTO gestao_fluxo_processo(usuario_id,escopo,estab_oracle,grupo_filial_id,data_inicial,data_final,saldo_conciliado,mostra_provisao,mostra_adiantamento,mostra_emprestimo,usa_previsao_inteligente,parametros_json) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [
@@ -267,17 +286,15 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
       );
     const saldoFonte = await fonte("oracle_fluxo_saldo_portador"),
       movFonte = await fonte("oracle_fluxo_movimentos_detalhe"),
-      realizadoFonte = await fonte("oracle_fluxo_recebimentos_realizados"),
-      pagamentosFonte = await fonte("oracle_fluxo_pagamentos_realizados"),
       prevFonte = await fonte("oracle_fluxo_previsao_recebimentos_historico");
     const binds: any = {
       P_DTINI: f.dataInicial,
       P_DTFIM: f.dataFinal,
       P_ESTAB: f.estab ?? null,
-      P_IDPORTADOR: f.idPortador ?? null,
+      P_IDPORTADOR: listaBind(f.idPortador),
       P_IDPESS: f.idPessoa ?? null,
-      P_IDSITUACAO: f.idSituacao ?? null,
-      P_IDANALITICA: f.idAnalitica ?? null,
+      P_IDSITUACAO: listaBind(f.idSituacao),
+      P_IDANALITICA: listaBind(f.idAnalitica),
       P_ORIGEM: f.origem || null,
       P_TIPO_SALDO: f.tipoSaldo ?? "FINANCEIRO",
     };
@@ -305,20 +322,12 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
         : [null];
     const saldos: any[] = [],
       movimentos: any[] = [],
-      realizados: any[] = [],
-      pagamentos: any[] = [],
       historico: any[] = [];
     for (const estab of escopos) {
       const parametros = { ...binds, P_ESTAB: estab };
       saldos.push(...(await executarFonteOracle<any>(saldoFonte, parametros)));
       movimentos.push(
         ...(await executarFonteOracle<any>(movFonte, parametros)),
-      );
-      realizados.push(
-        ...(await executarFonteOracle<any>(realizadoFonte, parametros)),
-      );
-      pagamentos.push(
-        ...(await executarFonteOracle<any>(pagamentosFonte, parametros)),
       );
       if (f.usaPrevisaoInteligente !== false)
         historico.push(
@@ -395,35 +404,6 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
         ],
       );
     }
-    for (const realizado of realizados)
-      await consultar(
-        `INSERT INTO gestao_fluxo_detalhe(processo_id,estab_oracle,data_fluxo,tipo_movimento,grupo_movimento,origem_movimento,valor_original,valor_entrada,valor_saida,valor_liquido,historico,dados_origem_json)
-         VALUES($1,$2,$3,'ENTRADA_REALIZADA','RECEBIMENTOS_REALIZADOS',$4,$5,$5,0,$5,$6,$7)`,
-        [
-          processo.id,
-          realizado.ESTAB,
-          iso(realizado.DATA_RECEBIMENTO),
-          realizado.TIPO_FINALIZADOR,
-          numero(realizado.VALOR),
-          `Recebimento realizado por ${realizado.TIPO_FINALIZADOR}`,
-          JSON.stringify(realizado),
-        ],
-      );
-    for (const pagamento of pagamentos)
-      await consultar(
-        `INSERT INTO gestao_fluxo_detalhe(processo_id,estab_oracle,data_fluxo,tipo_movimento,grupo_movimento,origem_movimento,id_documento_oracle,id_pessoa_oracle,id_analitica_oracle,valor_original,valor_entrada,valor_saida,valor_liquido,historico,dados_origem_json)
-         VALUES($1,$2,$3,'SAIDA_REALIZADA','PAGAMENTOS_REALIZADOS','DUPPAG',$4,$5,$6,$7,0,$7,-$7,'Pagamento realizado',$8)`,
-        [
-          processo.id,
-          pagamento.ESTAB,
-          iso(pagamento.DATA_PAGAMENTO),
-          String(pagamento.ID_DOCUMENTO_ORACLE ?? ""),
-          pagamento.ID_PESSOA_ORACLE,
-          pagamento.ID_ANALITICA_ORACLE,
-          numero(pagamento.VALOR),
-          JSON.stringify(pagamento),
-        ],
-      );
     const saldoInicial = saldos.reduce((s, r) => s + numero(r.SALDO), 0);
     for (const saldo of saldos)
       await consultar(
@@ -453,12 +433,6 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
               : iso(x.DATA_FLUXO)) === data,
         ),
         ent = itens.reduce((s, x) => s + numero(x.VALOR_ENTRADA), 0),
-        entRealizada = realizados
-          .filter((x) => iso(x.DATA_RECEBIMENTO) === data)
-          .reduce((s, x) => s + numero(x.VALOR), 0),
-        saiRealizada = pagamentos
-          .filter((x) => iso(x.DATA_PAGAMENTO) === data)
-          .reduce((s, x) => s + numero(x.VALOR), 0),
         sai = itens.reduce((s, x) => s + numero(x.VALOR_SAIDA), 0),
         pp = proj.filter((x) => x.data_fluxo === data),
         pi = pp.reduce((s, x) => s + x.valor, 0),
@@ -472,9 +446,9 @@ export async function processarFluxo(f: Filtros, usuarioId: number) {
           data,
           inicial,
           ent + pi,
-          entRealizada,
+          0,
           sai,
-          saiRealizada,
+          0,
           pp.find((x) => x.forma === "DINHEIRO")?.valor ?? 0,
           pp.find((x) => x.forma === "PIX")?.valor ?? 0,
           pp.find((x) => x.forma === "CARTAO_DEBITO")?.valor ?? 0,

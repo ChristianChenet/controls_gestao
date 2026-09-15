@@ -9,11 +9,13 @@ import {
   Expand,
   Filter,
   Lightbulb,
+  ListFilter,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
   Search,
+  Save,
   Settings2,
   ShieldAlert,
   TrendingUp,
@@ -56,14 +58,37 @@ const dataBr = (v: string) =>
 export function Gestao({ onSair }: { onSair: () => void }) {
   const hoje = new Date(),
     final = new Date(Date.now() + 29 * 86400000);
-  const [f, setF] = useState<any>({
-    dataInicial: hoje.toISOString().slice(0, 10),
-    dataFinal: final.toISOString().slice(0, 10),
-    tipoSaldo: "FINANCEIRO",
-    visao: "DIA",
-    tipoMovimento: "AMBOS",
-    usaPrevisaoInteligente: true,
-    formasPrevisao: ["DINHEIRO", "PIX", "CARTAO_DEBITO"],
+  const [f, setF] = useState<any>(() => {
+    const padrao = {
+      dataInicial: hoje.toISOString().slice(0, 10),
+      dataFinal: final.toISOString().slice(0, 10),
+      tipoSaldo: "FINANCEIRO",
+      visaoFinanceira: "PROJETADO",
+      visao: "DIA",
+      tipoMovimento: "AMBOS",
+      usaPrevisaoInteligente: true,
+      formasPrevisao: ["DINHEIRO", "PIX", "CARTAO_DEBITO"],
+    };
+    try {
+      const salvo = JSON.parse(
+        localStorage.getItem("controlSGestaoFiltros") ?? "null",
+      );
+      if (!salvo) return padrao;
+      const dataInicial =
+        salvo.dataInicial < padrao.dataInicial
+          ? padrao.dataInicial
+          : salvo.dataInicial;
+      return {
+        ...padrao,
+        ...salvo,
+        dataInicial,
+        dataFinal:
+          salvo.dataFinal < dataInicial ? dataInicial : salvo.dataFinal,
+        visaoFinanceira: "PROJETADO",
+      };
+    } catch {
+      return padrao;
+    }
   });
   const [id, setId] = useState<number>();
   const [dias, setDias] = useState<Dia[]>([]),
@@ -91,6 +116,9 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       "DASHBOARD" | "CALENDARIO" | "HORIZONTAL" | "VERTICAL"
     >("DASHBOARD"),
     [filtrosAbertos, setFiltrosAbertos] = useState(false),
+    [resumoFiltrosAberto, setResumoFiltrosAberto] = useState(false),
+    [insightExplicado, setInsightExplicado] = useState<any>(),
+    [avisoFiltros, setAvisoFiltros] = useState(""),
     [detalheIndicador, setDetalheIndicador] = useState<string>(),
     [editorIndicador, setEditorIndicador] = useState<any>(),
     [aba, setAba] = useState<"fluxo" | "fontes" | "administracao">("fluxo");
@@ -122,6 +150,72 @@ export function Gestao({ onSair }: { onSair: () => void }) {
       new Map(itens.map((x: any) => [x.estab_oracle, x])).values(),
     ) as any[];
   }, [f.grupoFilialId, gruposFiliais, opcoesOracle]);
+  const listaSelecionada = (valor: any) =>
+    Array.isArray(valor) ? valor : valor ? [valor] : [];
+  const resumoFiltros = useMemo(() => {
+    const nomes = (valor: any, itens: any[], id: string, descricao: string) => {
+      const ids = listaSelecionada(valor).map(Number);
+      return ids.length
+        ? itens
+            .filter((x) => ids.includes(Number(x[id])))
+            .map((x) => x[descricao] ?? x[id])
+            .join(", ")
+        : "Todos";
+    };
+    return [
+      [
+        "Período",
+        `${new Date(`${f.dataInicial}T12:00`).toLocaleDateString("pt-BR")} a ${new Date(`${f.dataFinal}T12:00`).toLocaleDateString("pt-BR")}`,
+      ],
+      ["Visão", "Somente projetado"],
+      [
+        "Grupo filial",
+        gruposFiliais.find((x) => x.id === f.grupoFilialId)?.nome ?? "Todos",
+      ],
+      [
+        "Estabelecimento",
+        estabelecimentos.find((x) => Number(x.estab_oracle) === Number(f.estab))
+          ?.nome_filial ?? "Todos",
+      ],
+      [
+        "Portadores",
+        nomes(
+          f.idPortador,
+          opcoesOracle.portadores ?? [],
+          "IDPORTADOR",
+          "DESCRICAO",
+        ),
+      ],
+      [
+        "Situações",
+        nomes(
+          f.idSituacao,
+          opcoesOracle.situacoes ?? [],
+          "IDSITUACAO",
+          "DESCRICAO",
+        ),
+      ],
+      [
+        "Analíticas",
+        nomes(
+          f.idAnalitica,
+          opcoesOracle.analiticas ?? [],
+          "IDANALITICA",
+          "DESCRICAO",
+        ),
+      ],
+      ["Saldo", f.tipoSaldo === "CONCILIADO" ? "Conciliado" : "Financeiro"],
+      ["Movimentos", f.tipoMovimento ?? "AMBOS"],
+    ];
+  }, [f, gruposFiliais, estabelecimentos, opcoesOracle]);
+  function salvarFiltros() {
+    localStorage.setItem(
+      "controlSGestaoFiltros",
+      JSON.stringify({ ...f, visaoFinanceira: "PROJETADO" }),
+    );
+    setAvisoFiltros("Filtros salvos neste dispositivo.");
+    window.setTimeout(() => setAvisoFiltros(""), 3000);
+  }
   const acoesDaVisao = (podeDetalhar = true) => (
     <div className="acoesVisao">
       {podeDetalhar && dias[0] && (
@@ -433,6 +527,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 De
                 <input
                   type="date"
+                  min={hoje.toISOString().slice(0, 10)}
                   value={f.dataInicial}
                   onChange={(e) => setF({ ...f, dataInicial: e.target.value })}
                 />
@@ -441,6 +536,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                 Até
                 <input
                   type="date"
+                  min={f.dataInicial}
                   value={f.dataFinal}
                   onChange={(e) => setF({ ...f, dataFinal: e.target.value })}
                 />
@@ -448,35 +544,20 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             </div>
             <label>
               Visão financeira
-              <select
-                value={f.visaoFinanceira ?? "AMBOS"}
-                onChange={(e) =>
-                  setF({ ...f, visaoFinanceira: e.target.value })
-                }
-              >
-                <option value="AMBOS">Realizado + projetado</option>
-                <option value="REALIZADO">Somente realizado</option>
+              <select value="PROJETADO" disabled>
                 <option value="PROJETADO">Somente projetado</option>
               </select>
             </label>
             <label>
               Portador / conta
-              <select
-                value={f.idPortador ?? ""}
-                onChange={(e) =>
-                  setF({
-                    ...f,
-                    idPortador: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              >
-                <option value="">Todos os portadores</option>
-                {opcoesOracle.portadores?.map((x: any) => (
-                  <option value={x.IDPORTADOR}>
-                    {x.ESTAB} · {x.IDPORTADOR} - {x.DESCRICAO}
-                  </option>
-                ))}
-              </select>
+              <MultiFiltro
+                todos="Todos os portadores"
+                itens={opcoesOracle.portadores ?? []}
+                valor={f.idPortador}
+                id="IDPORTADOR"
+                rotulo={(x) => `${x.ESTAB} · ${x.IDPORTADOR} - ${x.DESCRICAO}`}
+                onChange={(idPortador) => setF({ ...f, idPortador })}
+              />
             </label>
             <label>
               Saldo
@@ -502,43 +583,25 @@ export function Gestao({ onSair }: { onSair: () => void }) {
             <div className="duplo">
               <label>
                 Situação
-                <select
-                  value={f.idSituacao ?? ""}
-                  onChange={(e) =>
-                    setF({
-                      ...f,
-                      idSituacao: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                >
-                  <option value="">Todas</option>
-                  {opcoesOracle.situacoes?.map((x: any) => (
-                    <option value={x.IDSITUACAO}>{x.DESCRICAO}</option>
-                  ))}
-                </select>
+                <MultiFiltro
+                  todos="Todas"
+                  itens={opcoesOracle.situacoes ?? []}
+                  valor={f.idSituacao}
+                  id="IDSITUACAO"
+                  rotulo={(x) => x.DESCRICAO}
+                  onChange={(idSituacao) => setF({ ...f, idSituacao })}
+                />
               </label>
               <label>
                 Analítica
-                <select
-                  value={f.idAnalitica ?? ""}
-                  onChange={(e) =>
-                    setF({
-                      ...f,
-                      idAnalitica: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                >
-                  <option value="">Todas</option>
-                  {opcoesOracle.analiticas?.map((x: any) => (
-                    <option value={x.IDANALITICA}>
-                      {x.IDANALITICA} - {x.DESCRICAO}
-                    </option>
-                  ))}
-                </select>
+                <MultiFiltro
+                  todos="Todas"
+                  itens={opcoesOracle.analiticas ?? []}
+                  valor={f.idAnalitica}
+                  id="IDANALITICA"
+                  rotulo={(x) => `${x.IDANALITICA} - ${x.DESCRICAO}`}
+                  onChange={(idAnalitica) => setF({ ...f, idAnalitica })}
+                />
               </label>
             </div>
             <div className="duplo">
@@ -687,6 +750,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   De
                   <input
                     type="date"
+                    min={hoje.toISOString().slice(0, 10)}
                     value={f.dataInicial}
                     onChange={(e) =>
                       setF({ ...f, dataInicial: e.target.value })
@@ -697,6 +761,7 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   Até
                   <input
                     type="date"
+                    min={f.dataInicial}
                     value={f.dataFinal}
                     onChange={(e) => setF({ ...f, dataFinal: e.target.value })}
                   />
@@ -709,6 +774,19 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                   <RefreshCw className={carregando ? "girar" : ""} />
                   {carregando ? "Carregando dados" : "Atualizar dados"}
                 </button>
+                <button className="salvarFiltros" onClick={salvarFiltros}>
+                  <Save /> Salvar filtros
+                </button>
+                <button
+                  className="verFiltros"
+                  onClick={() => setResumoFiltrosAberto(true)}
+                  title="Ver filtros aplicados"
+                >
+                  <ListFilter /> Filtros aplicados
+                </button>
+                {avisoFiltros && (
+                  <span className="avisoFiltros">{avisoFiltros}</span>
+                )}
               </div>
               <div className="seletoresEscopo">
                 <label>
@@ -948,14 +1026,6 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                       ))}
                     </tr>
                     <tr>
-                      <th>(+) RECEBIMENTO REALIZADO</th>
-                      {diasGrade.map((d) => (
-                        <td className="positivo">
-                          {moeda(d.entradas_realizadas)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
                       <th>(+) RECEITAS FINANCEIRAS / RENDIMENTOS</th>
                       {diasGrade.map((d) => (
                         <td className="positivo">
@@ -968,14 +1038,6 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                       {diasGrade.map((d) => (
                         <td className="negativo">
                           {moeda(d.saidas_previstas)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <th>(-) PAGAMENTOS REALIZADOS</th>
-                      {diasGrade.map((d) => (
-                        <td className="negativo">
-                          {moeda(d.saidas_realizadas)}
                         </td>
                       ))}
                     </tr>
@@ -1072,10 +1134,8 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                       <th>DATA</th>
                       <th>SALDO INICIAL</th>
                       <th>RECEBIMENTO PREVISTO</th>
-                      <th>RECEBIMENTO REALIZADO</th>
                       <th>TOTAL ENTRADAS</th>
                       <th>PAGAMENTOS PREVISTOS</th>
-                      <th>PAGAMENTOS REALIZADOS</th>
                       <th>FLUXO LÍQUIDO</th>
                       <th>SALDO FINAL</th>
                     </tr>
@@ -1089,19 +1149,10 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                           {moeda(d.entradas_previstas)}
                         </td>
                         <td className="positivo">
-                          {moeda(d.entradas_realizadas)}
-                        </td>
-                        <td className="positivo">
-                          {moeda(
-                            Number(d.entradas_previstas) +
-                              Number(d.entradas_realizadas),
-                          )}
+                          {moeda(d.entradas_previstas)}
                         </td>
                         <td className="negativo">
                           {moeda(d.saidas_previstas)}
-                        </td>
-                        <td className="negativo">
-                          {moeda(d.saidas_realizadas)}
                         </td>
                         <td
                           className={
@@ -1181,9 +1232,21 @@ export function Gestao({ onSair }: { onSair: () => void }) {
                       <Lightbulb />
                       <div>
                         <b>{i.titulo}</b>
-                        <p>{i.descricao}</p>
+                        <p>
+                          {i.data_referencia
+                            ? `${new Date(i.data_referencia.slice(0, 10) + "T12:00").toLocaleDateString("pt-BR")}: `
+                            : ""}
+                          {i.descricao}
+                        </p>
                         <strong>{moeda(i.valor_referencia)}</strong>
                       </div>
+                      <button
+                        className="explicarInsight"
+                        title="Entenda este cálculo"
+                        onClick={() => setInsightExplicado(i)}
+                      >
+                        ?
+                      </button>
                     </article>
                   ))
                 ) : (
@@ -1198,6 +1261,88 @@ export function Gestao({ onSair }: { onSair: () => void }) {
               Usuário: {usuario.nome || usuario.email || "Conectado"}
             </div>
           </main>
+          {resumoFiltrosAberto && (
+            <div
+              className="modalIndicador modalFiltros"
+              role="dialog"
+              aria-modal="true"
+            >
+              <section>
+                <header>
+                  <div>
+                    <span>Consulta atual</span>
+                    <h2>Filtros aplicados</h2>
+                  </div>
+                  <button onClick={() => setResumoFiltrosAberto(false)}>
+                    <X />
+                  </button>
+                </header>
+                <dl>
+                  {resumoFiltros.map(([nome, valor]) => (
+                    <div key={nome}>
+                      <dt>{nome}</dt>
+                      <dd>{valor}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p>
+                  Este resumo também é incluído ao final de cada aba exportada
+                  para Excel.
+                </p>
+              </section>
+            </div>
+          )}
+          {insightExplicado && (
+            <div
+              className="modalIndicador modalExplicacao"
+              role="dialog"
+              aria-modal="true"
+            >
+              <section>
+                <header>
+                  <div>
+                    <span>Memória de cálculo</span>
+                    <h2>{insightExplicado.titulo}</h2>
+                  </div>
+                  <button onClick={() => setInsightExplicado(undefined)}>
+                    <X />
+                  </button>
+                </header>
+                <p>
+                  <b>Data identificada:</b>{" "}
+                  {new Date(
+                    insightExplicado.data_referencia.slice(0, 10) + "T12:00",
+                  ).toLocaleDateString("pt-BR")}
+                </p>
+                {(() => {
+                  let calculo: any = {};
+                  try {
+                    calculo = JSON.parse(insightExplicado.filtro_json || "{}");
+                  } catch {}
+                  return (
+                    <div className="memoriaCalculo">
+                      <span>
+                        Entradas previstas <b>{moeda(calculo.entradas)}</b>
+                      </span>
+                      <span>
+                        Saídas previstas <b>{moeda(calculo.saidas)}</b>
+                      </span>
+                      <span>
+                        Necessidade de caixa{" "}
+                        <b>{moeda(insightExplicado.valor_referencia)}</b>
+                      </span>
+                    </div>
+                  );
+                })()}
+                <p>
+                  A necessidade é calculada por{" "}
+                  <b>saídas previstas menos entradas previstas</b>. O sistema
+                  compara todos os dias do período e apresenta aquele com a
+                  maior diferença positiva.
+                </p>
+              </section>
+            </div>
+          )}
           {detalheIndicador && (
             <div className="modalIndicador" role="dialog" aria-modal="true">
               <section>
@@ -1487,6 +1632,60 @@ export function Gestao({ onSair }: { onSair: () => void }) {
         </>
       )}
     </div>
+  );
+}
+
+function MultiFiltro({
+  todos,
+  itens,
+  valor,
+  id,
+  rotulo,
+  onChange,
+}: {
+  todos: string;
+  itens: any[];
+  valor: any;
+  id: string;
+  rotulo: (item: any) => string;
+  onChange: (valor: number[]) => void;
+}) {
+  const selecionados = (
+    Array.isArray(valor) ? valor : valor ? [valor] : []
+  ).map(Number);
+  const unicos = Array.from(
+    new Map(itens.map((item) => [Number(item[id]), item])).values(),
+  );
+  const alternar = (codigo: number) =>
+    onChange(
+      selecionados.includes(codigo)
+        ? selecionados.filter((x) => x !== codigo)
+        : [...selecionados, codigo],
+    );
+  return (
+    <details className="multiFiltro">
+      <summary>
+        {selecionados.length ? `${selecionados.length} selecionado(s)` : todos}
+      </summary>
+      <div>
+        <button type="button" onClick={() => onChange([])}>
+          Limpar seleção
+        </button>
+        {unicos.map((item) => {
+          const codigo = Number(item[id]);
+          return (
+            <label key={codigo}>
+              <input
+                type="checkbox"
+                checked={selecionados.includes(codigo)}
+                onChange={() => alternar(codigo)}
+              />
+              <span>{rotulo(item)}</span>
+            </label>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 function Fontes() {
